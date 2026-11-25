@@ -6,6 +6,7 @@ import {
 } from '../shared/enums.js';
 import { ERROR_CODES, NexusError } from '../../shared/errors.js';
 import { isValidDate } from '../../shared/clock.js';
+import { validateResourceImpact } from './goal-resource-contract.js';
 
 export const GOAL_TRANSITIONS = Object.freeze({
   ACTIVE: ['ON_HOLD', 'ACHIEVED', 'PARTIALLY_ACHIEVED', 'ABANDONED', 'ARCHIVED'],
@@ -61,6 +62,10 @@ export function validateGoalInput(input, partial = false) {
   }
   if (input.target_date !== undefined && input.target_date !== null && !isValidDate(input.target_date)) {
     throw new NexusError(ERROR_CODES.VALIDATION_ERROR, 'target_date debe ser YYYY-MM-DD.', { field: 'target_date' });
+  }
+  const resourceImpact = input.resourceImpact !== undefined ? input.resourceImpact : input.resource_impact;
+  if (resourceImpact !== undefined && resourceImpact !== null) {
+    validateResourceImpact(resourceImpact);
   }
 }
 
