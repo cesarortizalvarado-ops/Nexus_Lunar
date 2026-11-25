@@ -1,8 +1,8 @@
 import { apiFetch, isTodaySaturday, showToast } from './js/api.js';
 import { createChatPanelController } from './js/chat-panel.js';
 import { state } from './js/state.js';
-import { handleDashboardClick, renderDashboardView } from './js/views/dashboard-view.js';
-import { handleAreasClick, handleAreasSubmit, renderAreasView } from './js/views/areas-view.js';
+import { handleDashboardChange, handleDashboardClick, handleDashboardSubmit, renderDashboardView } from './js/views/dashboard-view.js';
+import { handleAreasChange, handleAreasClick, handleAreasSubmit, renderAreasView } from './js/views/areas-view.js';
 import { handleSpacesChange, handleSpacesClick, handleSpacesSubmit, renderSpacesView } from './js/views/spaces-view.js';
 import { handleLibrariesClick, handleLibrariesSubmit, renderLibrariesView } from './js/views/libraries-view.js';
 import { handlePlanChange, handlePlanClick, handlePlanSubmit, renderPlanView } from './js/views/plan-view.js';
@@ -139,6 +139,8 @@ contentEl.addEventListener('click', async (e) => {
 
 contentEl.addEventListener('change', async (e) => {
   try {
+    if (state.currentView === 'dashboard' && (await handleDashboardChange(e, renderCurrentView))) return;
+    if (state.currentView === 'areas' && (await handleAreasChange(e, renderCurrentView))) return;
     if (state.currentView === 'spaces' && handleSpacesChange(e)) return;
     if (state.currentView === 'plan') await handlePlanChange(e, renderCurrentView);
   } catch (err) {
@@ -150,6 +152,7 @@ contentEl.addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
   try {
+    if (state.currentView === 'dashboard' && (await handleDashboardSubmit(form, renderCurrentView))) return;
     if (state.currentView === 'areas' && (await handleAreasSubmit(form, renderCurrentView))) return;
     if (state.currentView === 'spaces' && (await handleSpacesSubmit(form, renderCurrentView))) return;
     if (state.currentView === 'libraries' && (await handleLibrariesSubmit(form, renderCurrentView))) return;

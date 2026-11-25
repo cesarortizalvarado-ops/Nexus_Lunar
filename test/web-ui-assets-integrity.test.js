@@ -64,6 +64,7 @@ test('WEB UI ASSETS: HTML, CSS y módulos ES cumplen CSP estricta, sintaxis y en
       '/',
       '/styles.css',
       '/css/layout.css',
+      '/css/views.css',
       ...jsAssets.map((a) => a.webPath),
     ];
 
@@ -87,6 +88,10 @@ test('WEB UI ASSETS: HTML, CSS y módulos ES cumplen CSP estricta, sintaxis y en
     const html = byRoute.get('/').text;
     const cssMain = byRoute.get('/styles.css').text;
     const cssLayout = byRoute.get('/css/layout.css').text;
+    const cssViews = byRoute.get('/css/views.css').text;
+
+    assert.ok(byRoute.has('/js/charts-svg.js'), 'Debe existir /js/charts-svg.js');
+    assert.ok(byRoute.has('/js/voice-bridge.js'), 'Debe existir /js/voice-bridge.js');
 
     // 1. Verificar cero <script> inline (solo script modular local src="/app.js")
     const scriptTags = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
@@ -97,6 +102,8 @@ test('WEB UI ASSETS: HTML, CSS y módulos ES cumplen CSP estricta, sintaxis y en
     // 2. Verificar presencia de shell de 3 columnas y botones clave
     assert.ok(html.includes('id="copilot-panel"'), 'Debe incluir panel derecho persistente de chat');
     assert.ok(html.includes('id="plan-sat-badge"'), 'Debe incluir badge destacado en Plan Semanal');
+    assert.ok(html.includes('id="chat-voice-btn"'), 'Debe incluir botón de voz en chat');
+    assert.ok(html.includes('id="chat-tts-toggle"'), 'Debe incluir toggle TTS en chat');
 
     // 3. Verificar cero manejadores inline (onclick, onchange, onsubmit) en HTML y todos los módulos JS
     assert.equal(/\son(click|change|submit)\s*=/i.test(html), false, 'HTML no debe tener atributos inline on*');
@@ -109,6 +116,22 @@ test('WEB UI ASSETS: HTML, CSS y módulos ES cumplen CSP estricta, sintaxis y en
     assert.equal(/(?:src|href)=["']https?:\/\//i.test(html), false, 'HTML no debe enlazar URLs externas');
     assert.equal(/https?:\/\//i.test(cssMain), false, 'styles.css no debe importar recursos externos');
     assert.equal(/https?:\/\//i.test(cssLayout), false, 'css/layout.css no debe importar recursos externos');
+    assert.equal(/https?:\/\//i.test(cssViews), false, 'css/views.css no debe importar recursos externos');
+
+    // 4b. Verificar que helpers SVG nativos generan SVG accesible sin JS inline
+    const chartsMod = await import('../public/js/charts-svg.js');
+    const heatmapSvg = chartsMod.renderHabitsMoodHeatmap([
+      { date: '2026-11-28', habits: { scheduled: 1, completed: 1, partial: 0, missed: 0, skipped: 0, unknown: 0, completionRate: 1 }, mood: { mood_score: 5, energy_level: 4 } },
+      { date: '2026-11-29', habits: { scheduled: 1, completed: 0, partial: 0, missed: 0, skipped: 0, unknown: 1, completionRate: null }, mood: null },
+    ]);
+    assert.ok(heatmapSvg.includes('<svg') && heatmapSvg.includes('data-heatmap-date="2026-11-28"'));
+    const sparkSvg = chartsMod.renderMoodEnergySparkline([
+      { date: '2026-11-28', mood: { mood_score: 4, energy_level: 5 } },
+      { date: '2026-11-29', mood: { mood_score: 3, energy_level: 4 } },
+    ]);
+    assert.ok(sparkSvg.includes('<svg') && sparkSvg.includes('<polyline'));
+    const progSvg = chartsMod.renderProgressBarSvg(null, 'Sin tareas');
+    assert.ok(progSvg.includes('<svg') && progSvg.includes('Sin tareas'));
 
     // 5. Verificar que el frontend modular consume endpoints reales clave
     const combinedJs = jsAssets.map((a) => byRoute.get(a.webPath).text).join('\n');

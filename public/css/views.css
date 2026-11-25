@@ -1,0 +1,167 @@
+/* Estilos dedicados para Dashboards SVG, Calendario Maestro, CRUD por Área y Puente de Voz (Bloque 10) */
+
+.svg-heatmap,
+.svg-sparkline,
+.svg-progress {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.heatmap-cell {
+  cursor: pointer;
+}
+
+.heatmap-cell:hover rect {
+  stroke: var(--accent-soft);
+  stroke-width: 1.8;
+}
+
+.day-inspector {
+  margin-top: 12px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.cal-weekday-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 4px 0;
+}
+
+.cal-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cal-day-cell {
+  min-height: 92px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 7px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.cal-day-cell:hover {
+  border-color: var(--accent-soft);
+}
+
+.cal-day-cell.is-saturday {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.cal-day-cell.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.cal-day-cell.pad {
+  background: transparent;
+  border-style: dashed;
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cal-day-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.cal-tag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cal-tag {
+  font-size: 10px;
+  line-height: 1.25;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--surface-subtle);
+  border-left: 3px solid var(--accent);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-tag.type-important_date { border-left-color: #38bdf8; }
+.cal-tag.type-recurring_payment { border-left-color: var(--amber); }
+.cal-tag.type-recurring_payment.paid { border-left-color: var(--emerald); }
+.cal-tag.type-calendar_event { border-left-color: var(--accent-soft); }
+.cal-tag.type-financial_commitment { border-left-color: var(--coral); }
+.cal-tag.type-weekly_baseline { border-left-color: var(--emerald); }
+
+.areas-edit-panel {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.voice-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.voice-status-bar audio {
+  width: 100%;
+  height: 30px;
+}
+
+.btn.voice-recording {
+  background: var(--coral-tint);
+  border-color: rgba(239, 68, 68, 0.65);
+  color: #fca5a5;
+}
+
+@media (max-width: 980px) {
+  .cal-month-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+  .cal-weekdays {
+    display: none;
+  }
+  .cal-day-cell.pad {
+    display: none;
+  }
+}

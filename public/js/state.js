@@ -2,8 +2,16 @@ const now = new Date();
 
 export const state = {
   currentView: 'dashboard',
+  dashboardSection: 'all',
+  habitsMoodDays: 30,
+  selectedHeatmapDate: null,
+  selectedCalendarDate: null,
   planSubMode: 'active',
   areasSubTab: 'finance',
+  financeTypeFilter: '',
+  editingGoalId: null,
+  editingProjectId: null,
+  editingTaskId: null,
   health: null,
   catalog: null,
   storageHealth: null,
@@ -49,7 +57,7 @@ export const state = {
   draftEmployments: null,
   draftCommitments: null,
 
-  // Chat persistente y cola segura de propuestas
+  // Chat persistente, voz y cola segura de propuestas
   conversations: [],
   activeConversationId: null,
   chatMessages: [],
@@ -57,4 +65,8 @@ export const state = {
   copilotRejected: [],
   copilotMode: 'deterministic_local',
   copilotSending: false,
+  ttsEnabled: false,
+  speakingMessageId: null,
+  voiceState: 'idle',
+  voiceClip: null,
 };

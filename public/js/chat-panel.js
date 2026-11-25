@@ -1,16 +1,61 @@
 import { apiFetch, escapeHtml, showToast, todayLocalIso } from './api.js';
 import { state } from './state.js';
+import { createVoiceBridge } from './voice-bridge.js';
 
 export function createChatPanelController({ onSwitchView, onDataChanged }) {
   const selectEl = document.getElementById('chat-conversation-select');
   const newBtnEl = document.getElementById('chat-new-conv-btn');
   const modeBadgeEl = document.getElementById('chat-mode-badge');
+  const ttsToggleEl = document.getElementById('chat-tts-toggle');
   const messagesEl = document.getElementById('chat-messages');
+  const voiceSlotEl = document.getElementById('chat-voice-slot');
   const saturdaySlotEl = document.getElementById('chat-saturday-slot');
   const proposalsSlotEl = document.getElementById('chat-proposals-slot');
   const formEl = document.getElementById('chat-form');
   const inputEl = document.getElementById('chat-input');
+  const voiceBtnEl = document.getElementById('chat-voice-btn');
   const sendBtnEl = document.getElementById('chat-send-btn');
+
+  const voiceBridge = createVoiceBridge({
+    onTranscript: (text) => {
+      if (inputEl) inputEl.value = text;
+    },
+    onStatusChange: (mode) => {
+      state.voiceState = mode;
+      updateVoiceButton();
+    },
+    onAudioClip: (clip) => {
+      if (state.voiceClip?.url) URL.revokeObjectURL(state.voiceClip.url);
+      state.voiceClip = clip;
+      renderVoiceSlot();
+    },
+    onError: (msg) => {
+      showToast(msg, { type: 'info' });
+    },
+  });
+
+  function updateVoiceButton() {
+    if (!voiceBtnEl) return;
+    const isListening = state.voiceState === 'listening';
+    const isRecording = state.voiceState === 'recording';
+    voiceBtnEl.disabled = false;
+    voiceBtnEl.classList.toggle('voice-recording', isListening || isRecording);
+    if (isListening) {
+      voiceBtnEl.textContent = '⏹ Escuchando...';
+    } else if (isRecording) {
+      voiceBtnEl.textContent = '⏹ Grabando...';
+    } else {
+      voiceBtnEl.textContent = '🎙 Voz';
+    }
+  }
+
+  function updateTtsButton() {
+    if (!ttsToggleEl) return;
+    ttsToggleEl.classList.toggle('btn-primary', state.ttsEnabled);
+    ttsToggleEl.classList.toggle('btn-secondary', !state.ttsEnabled);
+    ttsToggleEl.setAttribute('aria-pressed', state.ttsEnabled ? 'true' : 'false');
+    ttsToggleEl.textContent = state.ttsEnabled ? '🔊 TTS ON' : '🔊 TTS';
+  }
 
   function updateModeBadge() {
     if (!modeBadgeEl) return;
@@ -49,11 +94,19 @@ export function createChatPanelController({ onSwitchView, onDataChanged }) {
         const role = msg.role === 'USER' ? 'user' : 'assistant';
         const roleLabel = role === 'user' ? 'Tú' : 'Copiloto';
         const timeStr = String(msg.created_at || '').slice(11, 16);
+        const isSpeaking = state.speakingMessageId === msg.id;
         return `
           <div class="chat-msg ${role}">
             <div class="chat-msg-meta">
               <span>${roleLabel}</span>
-              <span class="mono">${escapeHtml(timeStr)}</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="mono">${escapeHtml(timeStr)}</span>
+                ${
+                  role === 'assistant'
+                    ? `<button type="button" class="btn btn-secondary btn-sm chat-tts-msg-btn" data-msg-id="${escapeHtml(msg.id)}" style="padding:2px 6px;font-size:10px;">${isSpeaking ? '⏹ Detener' : '🔊 Leer'}</button>`
+                    : ''
+                }
+              </div>
             </div>
             <div>${escapeHtml(msg.content)}</div>
           </div>
@@ -61,6 +114,26 @@ export function createChatPanelController({ onSwitchView, onDataChanged }) {
       })
       .join('');
     messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function renderVoiceSlot() {
+    if (!voiceSlotEl) return;
+    if (!state.voiceClip) {
+      voiceSlotEl.innerHTML = '';
+      return;
+    }
+    voiceSlotEl.innerHTML = `
+      <div class="chat-slot-inner">
+        <div class="voice-status-bar" style="flex-direction:column;align-items:stretch;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <strong>Audio local grabado</strong>
+            <button type="button" class="btn btn-secondary btn-sm" id="chat-discard-voice-btn">Descartar</button>
+          </div>
+          <audio controls src="${escapeHtml(state.voiceClip.url)}"></audio>
+          <small>${escapeHtml(state.voiceClip.notice)}</small>
+        </div>
+      </div>
+    `;
   }
 
   function renderSaturdayCard() {
@@ -115,8 +188,11 @@ export function createChatPanelController({ onSwitchView, onDataChanged }) {
 
   function renderAll() {
     updateModeBadge();
+    updateTtsButton();
+    updateVoiceButton();
     renderConversationsSelect();
     renderMessages();
+    renderVoiceSlot();
     renderSaturdayCard();
     renderProposalsQueue();
   }
@@ -207,6 +283,50 @@ export function createChatPanelController({ onSwitchView, onDataChanged }) {
     inputEl?.focus();
   });
 
+  ttsToggleEl?.addEventListener('click', () => {
+    state.ttsEnabled = !state.ttsEnabled;
+    if (!state.ttsEnabled) {
+      voiceBridge.stopSpeaking();
+      state.speakingMessageId = null;
+    }
+    updateTtsButton();
+    renderMessages();
+  });
+
+  voiceBtnEl?.addEventListener('click', async () => {
+    await voiceBridge.toggleCapture();
+  });
+
+  voiceSlotEl?.addEventListener('click', (e) => {
+    if (e.target.id === 'chat-discard-voice-btn') {
+      if (state.voiceClip?.url) URL.revokeObjectURL(state.voiceClip.url);
+      state.voiceClip = null;
+      renderVoiceSlot();
+    }
+  });
+
+  messagesEl?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.chat-tts-msg-btn');
+    if (!btn) return;
+    const msgId = btn.dataset.msgId;
+    if (state.speakingMessageId === msgId) {
+      voiceBridge.stopSpeaking();
+      state.speakingMessageId = null;
+      renderMessages();
+      return;
+    }
+    const msg = state.chatMessages.find((m) => m.id === msgId);
+    if (!msg) return;
+    state.speakingMessageId = msgId;
+    renderMessages();
+    voiceBridge.speakText(msg.content, {
+      onEnd: () => {
+        state.speakingMessageId = null;
+        renderMessages();
+      },
+    });
+  });
+
   saturdaySlotEl?.addEventListener('click', (e) => {
     if (e.target.id === 'chat-open-plan-btn') {
       state.planSubMode = 'saturday';
@@ -267,6 +387,16 @@ export function createChatPanelController({ onSwitchView, onDataChanged }) {
 
       if (inputEl) inputEl.value = '';
       await refreshConversations();
+      if (state.ttsEnabled && res.assistantMessage?.content) {
+        state.speakingMessageId = res.assistantMessage.id;
+        renderMessages();
+        voiceBridge.speakText(res.assistantMessage.content, {
+          onEnd: () => {
+            state.speakingMessageId = null;
+            renderMessages();
+          },
+        });
+      }
       await onDataChanged({ silentViewRefresh: !res.saturdayReview });
     } catch (err) {
       showToast(err.message, { type: 'err', remediation: err.remediation });
@@ -279,5 +409,6 @@ export function createChatPanelController({ onSwitchView, onDataChanged }) {
   return {
     init: refreshConversations,
     render: renderAll,
+    destroy: () => voiceBridge.destroy(),
   };
 }

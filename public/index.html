@@ -7,6 +7,7 @@
   <title>Nexus Lunar — Centro Operativo Local</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/css/layout.css">
+  <link rel="stylesheet" href="/css/views.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body>
@@ -104,6 +105,7 @@
           </h2>
           <div style="display:flex;align-items:center;gap:6px;">
             <span class="badge badge-ok" id="chat-mode-badge">Determinista Local</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="chat-tts-toggle" aria-pressed="false" title="Activar lectura en voz alta local">🔊 TTS</button>
             <button type="button" class="icon-btn copilot-mobile-close" id="close-copilot-btn" title="Cerrar panel de chat" aria-label="Cerrar panel de chat">✕</button>
           </div>
         </div>
@@ -119,13 +121,14 @@
         <div class="chat-empty">Cargando historial del copiloto...</div>
       </div>
 
+      <div class="chat-slot" id="chat-voice-slot"></div>
       <div class="chat-slot" id="chat-saturday-slot"></div>
       <div class="chat-slot" id="chat-proposals-slot"></div>
 
       <form class="chat-form" id="chat-form">
         <textarea id="chat-input" name="message" required placeholder="Ej: Peso 78.5 kg, pagué Netflix 220 o ayúdame con la revisión del sábado..."></textarea>
         <div class="chat-form-actions">
-          <button type="button" class="btn btn-secondary btn-sm" id="chat-voice-btn" disabled title="Puente de voz local preparado para Bloque 10">🎙 Voz (Pronto)</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="chat-voice-btn" title="Dictado o grabación local de voz">🎙 Voz</button>
           <button type="submit" class="btn btn-primary btn-sm" id="chat-send-btn">Enviar</button>
         </div>
       </form>

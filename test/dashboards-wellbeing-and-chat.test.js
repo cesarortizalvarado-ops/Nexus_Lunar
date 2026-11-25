@@ -480,9 +480,16 @@ test('V20 · 5 — Rutas REST por área (Metas, Proyectos, Tareas, Finanzas, Inv
   const { server, baseUrl } = await startTestServer(core);
 
   try {
-    // Goals / Projects / Tasks status & archive
+    // Goals / Projects / Tasks update, status & archive
     const g = await apiJson(baseUrl, '/api/goals', { method: 'POST', body: { name: 'Meta REST', horizon: 'SHORT' } });
     assert.equal(g.status, 201);
+    const gUpdate = await apiJson(baseUrl, `/api/goals/${g.json.data.id}`, {
+      method: 'PATCH',
+      body: { name: 'Meta REST Editada', resourceImpact: { time: { weeklyHoursRequired: 2 } } },
+    });
+    assert.equal(gUpdate.status, 200);
+    assert.equal(gUpdate.json.data.name, 'Meta REST Editada');
+    assert.equal(gUpdate.json.data.resourceImpact.time.weeklyHoursRequired, 2);
     const gPatch = await apiJson(baseUrl, `/api/goals/${g.json.data.id}/status`, { method: 'PATCH', body: { status: 'ON_HOLD' } });
     assert.equal(gPatch.status, 200);
     assert.equal(gPatch.json.data.status, 'ON_HOLD');
@@ -492,13 +499,23 @@ test('V20 · 5 — Rutas REST por área (Metas, Proyectos, Tareas, Finanzas, Inv
 
     const p = await apiJson(baseUrl, '/api/projects', { method: 'POST', body: { name: 'Proyecto REST' } });
     assert.equal(p.status, 201);
-    const pPatch = await apiJson(baseUrl, `/api/projects/${p.json.data.id}/status`, { method: 'PATCH', body: { status: 'ACTIVE' } });
-    assert.equal(pPatch.status, 200);
+    const pUpdate = await apiJson(baseUrl, `/api/projects/${p.json.data.id}`, {
+      method: 'PATCH',
+      body: { name: 'Proyecto Editado', status: 'ACTIVE', target_date: '2026-12-31' },
+    });
+    assert.equal(pUpdate.status, 200);
+    assert.equal(pUpdate.json.data.status, 'ACTIVE');
     const pDel = await apiJson(baseUrl, `/api/projects/${p.json.data.id}`, { method: 'DELETE' });
     assert.equal(pDel.status, 200);
 
     const t = await apiJson(baseUrl, '/api/tasks', { method: 'POST', body: { title: 'Tarea REST' } });
     assert.equal(t.status, 201);
+    const tUpdate = await apiJson(baseUrl, `/api/tasks/${t.json.data.id}`, {
+      method: 'PATCH',
+      body: { title: 'Tarea Editada', due_date: '2026-12-15', urgency: 4 },
+    });
+    assert.equal(tUpdate.status, 200);
+    assert.equal(tUpdate.json.data.title, 'Tarea Editada');
     const tDel = await apiJson(baseUrl, `/api/tasks/${t.json.data.id}`, { method: 'DELETE' });
     assert.equal(tDel.status, 200);
 
