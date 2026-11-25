@@ -1,5 +1,8 @@
 import { ERROR_CODES, NexusError } from '../../shared/errors.js';
-import { normalizeRecipe } from '../../domain/knowledge/recipe-contract.js';
+import {
+  normalizeRecipe,
+  validateRecipeIngredient,
+} from '../../domain/knowledge/recipe-contract.js';
 import { assertCompatibleUnit, normalizeUnit } from '../../domain/inventory/units.js';
 
 function round2(value) {
@@ -82,6 +85,37 @@ function buildInventoryMap(currentInventory = []) {
   return map;
 }
 
+function normalizeRecipeForCosting(recipe) {
+  if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)) {
+    throw new NexusError(ERROR_CODES.VALIDATION_ERROR, 'La receta debe ser un objeto válido.');
+  }
+  if (recipe.category !== undefined || recipe.caloriesPerServing !== undefined) {
+    return normalizeRecipe(recipe);
+  }
+  if (typeof recipe.id !== 'string' || !recipe.id.trim()) {
+    throw new NexusError(ERROR_CODES.VALIDATION_ERROR, 'id es obligatorio en Recipe.', {
+      field: 'id',
+    });
+  }
+  if (typeof recipe.name !== 'string' || !recipe.name.trim()) {
+    throw new NexusError(ERROR_CODES.VALIDATION_ERROR, 'name es obligatorio en Recipe.', {
+      field: 'name',
+    });
+  }
+  if (!Array.isArray(recipe.ingredients) || recipe.ingredients.length === 0) {
+    throw new NexusError(
+      ERROR_CODES.VALIDATION_ERROR,
+      'ingredients debe ser un arreglo con al menos un ingrediente.',
+      { field: 'ingredients' }
+    );
+  }
+  return {
+    id: recipe.id.trim(),
+    name: recipe.name.trim(),
+    ingredients: recipe.ingredients.map((ing, idx) => validateRecipeIngredient(ing, idx)),
+  };
+}
+
 export function evaluateRecipeCost(recipes = [], currentInventory = []) {
   if (!Array.isArray(recipes)) {
     throw new NexusError(
@@ -91,7 +125,7 @@ export function evaluateRecipeCost(recipes = [], currentInventory = []) {
     );
   }
 
-  const normalizedRecipes = recipes.map((recipe) => normalizeRecipe(recipe));
+  const normalizedRecipes = recipes.map((recipe) => normalizeRecipeForCosting(recipe));
   const inventoryMap = buildInventoryMap(currentInventory);
 
   const consolidatedMap = new Map();
