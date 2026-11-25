@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0b0d14">
   <title>Nexus Lunar — Centro Operativo Local</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/css/layout.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body>
@@ -22,32 +23,38 @@
         <button type="button" class="icon-btn sidebar-toggle" id="sidebar-toggle" aria-expanded="true" aria-controls="main-nav" title="Colapsar barra lateral">☰</button>
       </div>
 
-      <div class="nav-section-label">OPERACIÓN SEMANAL</div>
-      <nav class="nav-tabs" id="main-nav" role="tablist" aria-label="Vistas de Nexus Lunar">
-        <button type="button" class="nav-tab active" role="tab" id="tab-week" aria-selected="true" aria-controls="view-content" data-view="week" tabindex="0">
+      <div class="nav-section-label">ESPACIOS</div>
+      <nav class="nav-tabs" id="main-nav" role="tablist" aria-label="Espacios de Nexus Lunar">
+        <button type="button" class="nav-tab active" role="tab" id="tab-dashboard" aria-selected="true" aria-controls="view-content" data-view="dashboard" tabindex="0">
           <span class="nav-icon" aria-hidden="true">◫</span>
-          <span class="nav-label">Semana Activa</span>
+          <span class="nav-label">Panel Visual</span>
           <kbd class="nav-kbd">Alt+1</kbd>
         </button>
-        <button type="button" class="nav-tab" role="tab" id="tab-saturday" aria-selected="false" aria-controls="view-content" data-view="saturday" tabindex="-1">
-          <span class="nav-icon" aria-hidden="true">◈</span>
-          <span class="nav-label">Revisión Sábado</span>
+        <button type="button" class="nav-tab" role="tab" id="tab-areas" aria-selected="false" aria-controls="view-content" data-view="areas" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">⊞</span>
+          <span class="nav-label">Áreas Manuales</span>
           <kbd class="nav-kbd">Alt+2</kbd>
         </button>
         <button type="button" class="nav-tab" role="tab" id="tab-spaces" aria-selected="false" aria-controls="view-content" data-view="spaces" tabindex="-1">
           <span class="nav-icon" aria-hidden="true">❖</span>
-          <span class="nav-label">Espacios</span>
+          <span class="nav-label">Perfil y Mini-Apps</span>
           <kbd class="nav-kbd">Alt+3</kbd>
         </button>
-        <button type="button" class="nav-tab" role="tab" id="tab-copilot" aria-selected="false" aria-controls="view-content" data-view="copilot" tabindex="-1">
-          <span class="nav-icon" aria-hidden="true">✦</span>
-          <span class="nav-label">Copiloto Seguro</span>
+        <button type="button" class="nav-tab" role="tab" id="tab-libraries" aria-selected="false" aria-controls="view-content" data-view="libraries" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">☷</span>
+          <span class="nav-label">Bibliotecas</span>
           <kbd class="nav-kbd">Alt+4</kbd>
+        </button>
+        <button type="button" class="nav-tab" role="tab" id="tab-plan" aria-selected="false" aria-controls="view-content" data-view="plan" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">◈</span>
+          <span class="nav-label">Plan Semanal</span>
+          <span class="nav-badge hidden" id="plan-sat-badge">SÁB</span>
+          <kbd class="nav-kbd">Alt+5</kbd>
         </button>
         <button type="button" class="nav-tab" role="tab" id="tab-system" aria-selected="false" aria-controls="view-content" data-view="system" tabindex="-1">
           <span class="nav-icon" aria-hidden="true">⚙</span>
-          <span class="nav-label">Núcleo y Respaldos</span>
-          <kbd class="nav-kbd">Alt+5</kbd>
+          <span class="nav-label">Sistema</span>
+          <kbd class="nav-kbd">Alt+6</kbd>
         </button>
       </nav>
 
@@ -63,20 +70,21 @@
     <main class="main-area">
       <header class="topbar">
         <div class="topbar-title-group">
-          <div class="eyebrow">NEXUS LUNAR / <span id="section-name">SEMANA ACTIVA Y BASELINE INMUTABLE</span></div>
-          <h1 id="page-title">Semana Activa y Baseline Inmutable</h1>
+          <div class="eyebrow">NEXUS LUNAR / <span id="section-name">PANEL VISUAL Y CALENDARIO MAESTRO</span></div>
+          <h1 id="page-title">Panel Visual</h1>
         </div>
         <div class="topbar-actions">
           <div class="health-chip" id="health-chip">
             <span class="status-dot"></span>
-            <span id="health-chip-text">v18 · LOCAL</span>
+            <span id="health-chip-text">v20 · LOCAL</span>
           </div>
           <button type="button" class="btn btn-secondary btn-sm" id="quick-backup-btn" title="Crear respaldo local inmediato">Respaldar ahora</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="toggle-copilot-btn" aria-expanded="true" aria-controls="copilot-panel" title="Mostrar u ocultar Chat Copiloto (Alt+C)">Chat (Alt+C)</button>
           <button type="button" class="icon-btn" id="refresh-btn" title="Actualizar vista actual" aria-label="Actualizar vista">↻</button>
         </div>
       </header>
 
-      <section id="view-content" class="view-container" role="tabpanel" aria-labelledby="tab-week"></section>
+      <section id="view-content" class="view-container" role="tabpanel" aria-labelledby="tab-dashboard"></section>
 
       <footer class="app-footer">
         <span>NEXUS LUNAR</span>
@@ -86,6 +94,42 @@
         <span>Arquitectura local-first determinista</span>
       </footer>
     </main>
+
+    <aside class="copilot-panel" id="copilot-panel" aria-label="Chat Copiloto Persistente">
+      <div class="copilot-header">
+        <div class="copilot-title-row">
+          <h2>
+            <span aria-hidden="true">✦</span>
+            <span>Copiloto Persistente</span>
+          </h2>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="badge badge-ok" id="chat-mode-badge">Determinista Local</span>
+            <button type="button" class="icon-btn copilot-mobile-close" id="close-copilot-btn" title="Cerrar panel de chat" aria-label="Cerrar panel de chat">✕</button>
+          </div>
+        </div>
+        <div class="copilot-conv-row">
+          <select id="chat-conversation-select" aria-label="Conversaciones guardadas">
+            <option value="">Nueva conversación</option>
+          </select>
+          <button type="button" class="btn btn-secondary btn-sm" id="chat-new-conv-btn">+ Nueva</button>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chat-messages" aria-live="polite">
+        <div class="chat-empty">Cargando historial del copiloto...</div>
+      </div>
+
+      <div class="chat-slot" id="chat-saturday-slot"></div>
+      <div class="chat-slot" id="chat-proposals-slot"></div>
+
+      <form class="chat-form" id="chat-form">
+        <textarea id="chat-input" name="message" required placeholder="Ej: Peso 78.5 kg, pagué Netflix 220 o ayúdame con la revisión del sábado..."></textarea>
+        <div class="chat-form-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="chat-voice-btn" disabled title="Puente de voz local preparado para Bloque 10">🎙 Voz (Pronto)</button>
+          <button type="submit" class="btn btn-primary btn-sm" id="chat-send-btn">Enviar</button>
+        </div>
+      </form>
+    </aside>
   </div>
 
   <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>

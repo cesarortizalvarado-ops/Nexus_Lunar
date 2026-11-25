@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,7 +20,23 @@ function makeTempDirs() {
   };
 }
 
-test('WEB UI ASSETS: HTML, CSS y JS se sirven con cabeceras seguras, cumplen CSP estricta y consumen endpoints reales', async () => {
+function collectPublicJsPaths(baseDir, currentDir = baseDir) {
+  const results = [];
+  for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+    const full = path.join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...collectPublicJsPaths(baseDir, full));
+    } else if (entry.isFile() && entry.name.endsWith('.js')) {
+      results.push({
+        fullPath: full,
+        webPath: '/' + path.relative(baseDir, full).replaceAll(path.sep, '/'),
+      });
+    }
+  }
+  return results;
+}
+
+test('WEB UI ASSETS: HTML, CSS y módulos ES cumplen CSP estricta, sintaxis y endpoints reales', async () => {
   const dirs = makeTempDirs();
   const core = createNexusCore({
     dataDir: dirs.dataDir,
@@ -32,50 +49,83 @@ test('WEB UI ASSETS: HTML, CSS y JS se sirven con cabeceras seguras, cumplen CSP
   const baseUrl = `http://127.0.0.1:${port}`;
 
   try {
-    const [resHtml, resCss, resJs] = await Promise.all([
-      fetch(`${baseUrl}/`),
-      fetch(`${baseUrl}/styles.css`),
-      fetch(`${baseUrl}/app.js`),
-    ]);
+    const publicRoot = path.resolve(process.cwd(), 'public');
+    const jsAssets = [
+      { fullPath: path.join(publicRoot, 'app.js'), webPath: '/app.js' },
+      ...collectPublicJsPaths(publicRoot, path.join(publicRoot, 'js')),
+    ];
 
-    assert.equal(resHtml.status, 200);
-    assert.equal(resCss.status, 200);
-    assert.equal(resJs.status, 200);
-
-    for (const res of [resHtml, resCss, resJs]) {
-      assert.ok(res.headers.get('content-security-policy')?.includes("default-src 'self'"));
-      assert.equal(res.headers.get('x-frame-options'), 'DENY');
-      assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    // Validar sintaxis node --check sobre app.js y todos los módulos bajo public/js/
+    for (const asset of jsAssets) {
+      execFileSync(process.execPath, ['--check', asset.fullPath], { stdio: 'pipe' });
     }
 
-    const html = await resHtml.text();
-    const css = await resCss.text();
-    const js = await resJs.text();
+    const staticRoutes = [
+      '/',
+      '/styles.css',
+      '/css/layout.css',
+      ...jsAssets.map((a) => a.webPath),
+    ];
 
-    // 1. Verificar cero <script> inline (solo script externo local src="/app.js")
+    const fetched = await Promise.all(
+      staticRoutes.map(async (route) => {
+        const res = await fetch(`${baseUrl}${route}`);
+        const text = await res.text();
+        return { route, res, text };
+      })
+    );
+
+    const byRoute = new Map(fetched.map((item) => [item.route, item]));
+
+    for (const { route, res } of fetched) {
+      assert.equal(res.status, 200, `Debe servir ${route} con HTTP 200`);
+      assert.ok(res.headers.get('content-security-policy')?.includes("default-src 'self'"), `CSP faltante en ${route}`);
+      assert.equal(res.headers.get('x-frame-options'), 'DENY', `X-Frame-Options faltante en ${route}`);
+      assert.equal(res.headers.get('x-content-type-options'), 'nosniff', `X-Content-Type-Options faltante en ${route}`);
+    }
+
+    const html = byRoute.get('/').text;
+    const cssMain = byRoute.get('/styles.css').text;
+    const cssLayout = byRoute.get('/css/layout.css').text;
+
+    // 1. Verificar cero <script> inline (solo script modular local src="/app.js")
     const scriptTags = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
     assert.equal(scriptTags.length, 1);
     assert.match(scriptTags[0][1], /src="\/app\.js"/i);
     assert.equal(scriptTags[0][2].trim(), '', 'No debe existir código JS inline dentro de <script>');
 
-    // 2. Verificar cero manejadores inline (onclick, onchange, onsubmit) en HTML y JS
+    // 2. Verificar presencia de shell de 3 columnas y botones clave
+    assert.ok(html.includes('id="copilot-panel"'), 'Debe incluir panel derecho persistente de chat');
+    assert.ok(html.includes('id="plan-sat-badge"'), 'Debe incluir badge destacado en Plan Semanal');
+
+    // 3. Verificar cero manejadores inline (onclick, onchange, onsubmit) en HTML y todos los módulos JS
     assert.equal(/\son(click|change|submit)\s*=/i.test(html), false, 'HTML no debe tener atributos inline on*');
-    assert.equal(/\son(click|change|submit)\s*=/i.test(js), false, 'app.js no debe generar atributos inline on*');
+    for (const asset of jsAssets) {
+      const code = byRoute.get(asset.webPath).text;
+      assert.equal(/\son(click|change|submit)\s*=/i.test(code), false, `${asset.webPath} no debe generar atributos inline on*`);
+    }
 
-    // 3. Verificar cero CDNs o recursos externos en HTML y CSS
+    // 4. Verificar cero CDNs o recursos externos en HTML y CSS
     assert.equal(/(?:src|href)=["']https?:\/\//i.test(html), false, 'HTML no debe enlazar URLs externas');
-    assert.equal(/https?:\/\//i.test(css), false, 'CSS no debe importar recursos externos');
+    assert.equal(/https?:\/\//i.test(cssMain), false, 'styles.css no debe importar recursos externos');
+    assert.equal(/https?:\/\//i.test(cssLayout), false, 'css/layout.css no debe importar recursos externos');
 
-    // 4. Verificar que app.js consume los endpoints reales del Bloque 5
+    // 5. Verificar que el frontend modular consume endpoints reales clave
+    const combinedJs = jsAssets.map((a) => byRoute.get(a.webPath).text).join('\n');
     const requiredEndpoints = [
       '/api/spaces/snapshot',
+      '/api/spaces/catalog',
       '/api/planning/saturday/prepare',
       '/api/planning/saturday/approve',
       '/api/planning/baselines',
-      '/api/copilot/proposals',
+      '/api/dashboard/habits-mood',
+      '/api/dashboard/projects-goals',
+      '/api/dashboard/calendar',
+      '/api/copilot/chat',
+      '/api/copilot/conversations',
     ];
     for (const endpoint of requiredEndpoints) {
-      assert.ok(js.includes(endpoint), `app.js debe consumir el endpoint real ${endpoint}`);
+      assert.ok(combinedJs.includes(endpoint), `Frontend modular debe consumir ${endpoint}`);
     }
   } finally {
     await new Promise((resolve) => server.close(resolve));
