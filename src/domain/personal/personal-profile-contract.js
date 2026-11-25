@@ -354,11 +354,18 @@ export function validateRecurringCommitments(commitments) {
         { field: `recurringCommitments[${idx}].frequency` }
       );
     }
-    return {
+    const normalizedCommitment = {
       name: c.name.trim(),
       amount: round2(amount),
       frequency: c.frequency,
     };
+    if (Number.isInteger(c.dueDayOfMonth) && c.dueDayOfMonth >= 1 && c.dueDayOfMonth <= 31) {
+      normalizedCommitment.dueDayOfMonth = c.dueDayOfMonth;
+    }
+    if (Number.isInteger(c.dueMonth) && c.dueMonth >= 1 && c.dueMonth <= 12) {
+      normalizedCommitment.dueMonth = c.dueMonth;
+    }
+    return normalizedCommitment;
   });
 }
 

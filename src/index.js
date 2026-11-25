@@ -1,7 +1,11 @@
 import { createNexusCore } from './core/nexus-core.js';
 import { createCoreHttpServer } from './interfaces/http/http-server.js';
 
-const core = createNexusCore();
+const runtimeTimezone =
+  process.env.NEXUS_LUNAR_TIMEZONE ??
+  Intl.DateTimeFormat().resolvedOptions().timeZone ??
+  'UTC';
+const core = createNexusCore({ timezone: runtimeTimezone });
 const server = createCoreHttpServer(core);
 
 server.listen(core.config.port, core.config.host, () => {
@@ -9,7 +13,11 @@ server.listen(core.config.port, core.config.host, () => {
   console.log(`Nexus Lunar ${version.version} activo en http://${core.config.host}:${core.config.port}`);
   console.log(`Base de datos: ${core.persistenceService.getDbPath()} (esquema v${version.schema_version})`);
   console.log(`Respaldos: ${core.config.backupDir}`);
-  console.log('Modo: Local / Offline / Sin IA real integrada. Pulsa Ctrl+C para detener.');
+  console.log(
+    core.config.ollamaEndpoint
+      ? `Modo: Local + Ollama configurado (${core.config.ollamaModel}). Pulsa Ctrl+C para detener.`
+      : 'Modo: Local / Offline determinista. Pulsa Ctrl+C para detener.'
+  );
 });
 
 function shutdown() {

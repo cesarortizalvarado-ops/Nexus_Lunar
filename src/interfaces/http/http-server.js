@@ -12,7 +12,7 @@ const PUT_PATCH_MUTATION_ACTIONS = new Set(['UPDATE', 'CORRECT', 'APPROVE', 'ARC
 const DELETE_MUTATION_ACTIONS = new Set(['DELETE', 'ARCHIVE']);
 
 const SECURITY_HEADERS = Object.freeze({
-  'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'",
+  'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'",
   'x-frame-options': 'DENY',
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
@@ -291,6 +291,12 @@ const HTTP_REST_ROUTE_DEFINITIONS = Object.freeze([
   // Espacios Especializados, Revisión del Sábado y Copiloto
   {
     method: 'GET',
+    path: '/api/spaces/catalog',
+    status: 200,
+    operation_type: 'spaces.catalog',
+  },
+  {
+    method: 'GET',
     path: '/api/spaces/snapshot',
     status: 200,
     operation_type: 'spaces.snapshot',
@@ -358,17 +364,81 @@ const publicFiles = {
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
 };
 
+const ASSET_MIME_BY_EXT = Object.freeze({
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
+});
+
+function resolveSafeStaticFile(pathname) {
+  if (typeof pathname !== 'string' || pathname.includes('\\') || pathname.includes('\0') || pathname.includes('..')) {
+    return null;
+  }
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    throw new NexusError(ERROR_CODES.VALIDATION_ERROR, 'Ruta de archivo estático malformada.', { statusCode: 400 });
+  }
+  if (decoded.includes('\\') || decoded.includes('\0') || decoded.includes('..')) {
+    throw new NexusError(ERROR_CODES.VALIDATION_ERROR, 'Ruta de archivo estático inválida.', { statusCode: 400 });
+  }
+  const segments = decoded.split('/').filter(Boolean);
+  if (segments.some((seg) => seg.startsWith('..'))) {
+    throw new NexusError(ERROR_CODES.VALIDATION_ERROR, 'Ruta de archivo estático inválida.', { statusCode: 400 });
+  }
+
+  const ext = path.extname(decoded).toLowerCase();
+  let contentType = null;
+  if (decoded.startsWith('/js/') && ext === '.js') {
+    contentType = 'text/javascript; charset=utf-8';
+  } else if (decoded.startsWith('/css/') && ext === '.css') {
+    contentType = 'text/css; charset=utf-8';
+  } else if (decoded.startsWith('/assets/') && ASSET_MIME_BY_EXT[ext]) {
+    contentType = ASSET_MIME_BY_EXT[ext];
+  } else {
+    return null;
+  }
+
+  const targetPath = path.resolve(publicDir, `.${decoded}`);
+  if (!targetPath.startsWith(publicDir + path.sep)) {
+    throw new NexusError(ERROR_CODES.VALIDATION_ERROR, 'Ruta de archivo estático fuera de public/.', { statusCode: 400 });
+  }
+  return { targetPath, contentType };
+}
+
 async function servePublic(req, res, pathname) {
+  if (req.method !== 'GET') return false;
   const entry = publicFiles[pathname];
-  if (req.method !== 'GET' || !entry) return false;
-  const content = await readFile(path.join(publicDir, entry[0]));
-  res.writeHead(200, {
-    ...SECURITY_HEADERS,
-    'content-type': entry[1],
-    'cache-control': 'no-cache',
-  });
-  res.end(content);
-  return true;
+  if (entry) {
+    const content = await readFile(path.join(publicDir, entry[0]));
+    res.writeHead(200, {
+      ...SECURITY_HEADERS,
+      'content-type': entry[1],
+      'cache-control': 'no-cache',
+    });
+    res.end(content);
+    return true;
+  }
+
+  const resolved = resolveSafeStaticFile(pathname);
+  if (!resolved) return false;
+  try {
+    const content = await readFile(resolved.targetPath);
+    res.writeHead(200, {
+      ...SECURITY_HEADERS,
+      'content-type': resolved.contentType,
+      'cache-control': 'no-cache',
+    });
+    res.end(content);
+    return true;
+  } catch (err) {
+    if (err?.code === 'ENOENT' || err?.code === 'EISDIR') {
+      return false;
+    }
+    throw err;
+  }
 }
 
 function sendJson(res, statusCode, payload) {
@@ -518,6 +588,8 @@ export function createCoreHttpServer(core) {
           timezone: core.config.timezone,
           local_only: true,
           ai_integrated: false,
+          ollama_configured: Boolean(core.config?.ollamaEndpoint),
+          ollama_model: core.config?.ollamaEndpoint ? core.config.ollamaModel : null,
           timestamp: core.clock.nowIso(),
         });
       }

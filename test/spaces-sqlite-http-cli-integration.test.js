@@ -122,7 +122,7 @@ test('BLOQUE 5 · 1 — SQLite v18 + Respaldo y Restauración íntegra de Espaci
   });
 
   try {
-    assert.equal(core.persistenceService.getSchemaVersion(), 18);
+    assert.equal(core.persistenceService.getSchemaVersion(), 19);
 
     const saveProf = await core.executeOperationAsync({
       operation_type: 'spaces.profile.save',

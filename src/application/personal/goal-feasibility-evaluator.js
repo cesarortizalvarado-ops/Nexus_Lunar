@@ -124,8 +124,20 @@ export function evaluateGoalFeasibility(activeGoals = [], resourceLimits = {}, u
 
     if (limits.discretionaryWeeklyHours === null) {
       const blockedWorkHours = calculateTotalBlockedWeeklyHours(profile.employments);
-      // 112h despierto (16h*7) - horas laborales bloqueadas - 56h descanso/operación personal
-      limits.discretionaryWeeklyHours = round2(Math.max(0, 112 - blockedWorkHours - 56));
+      const sleepWeeklyHours =
+        normalizeOptionalLimit(
+          resourceLimits?.sleepWeeklyHours ?? resolvedProfileInput?.sleepWeeklyHours ?? profile.sleepWeeklyHours ?? 56,
+          'sleepWeeklyHours'
+        ) ?? 56;
+      const personalUpkeepWeeklyHours =
+        normalizeOptionalLimit(
+          resourceLimits?.personalUpkeepWeeklyHours ?? resolvedProfileInput?.personalUpkeepWeeklyHours ?? profile.personalUpkeepWeeklyHours ?? 21,
+          'personalUpkeepWeeklyHours'
+        ) ?? 21;
+      // 168h totales/semana - sueño (56h) - operación personal/comidas/traslados (21h) - trabajo bloqueado
+      limits.discretionaryWeeklyHours = round2(
+        Math.max(0, 168 - sleepWeeklyHours - personalUpkeepWeeklyHours - blockedWorkHours)
+      );
     }
   }
 

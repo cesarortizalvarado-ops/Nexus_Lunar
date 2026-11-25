@@ -205,9 +205,9 @@ test('B02.3 (DP-02) — Migración v6 -> v17 íntegra, no destructiva, con respa
 
     persistence.shutdownStorage();
 
-    // 2. Iniciar el núcleo completo (ejecuta automáticamente respaldo pre-migration + migraciones v7..v18)
+    // 2. Iniciar el núcleo completo (ejecuta automáticamente respaldo pre-migration + migraciones v7..v19)
     const core = createNexusCore({ dataDir: dirs.dataDir, backupDir: dirs.backupDir });
-    assert.equal(core.persistenceService.getSchemaVersion(), 18);
+    assert.equal(core.persistenceService.getSchemaVersion(), 19);
 
     // Verificar respaldo previo automático íntegro
     const backups = core.backupService.listBackups();
@@ -308,7 +308,7 @@ test('B02.4 (DP-02) — Migración v16 -> v17: detección explícita de conflict
     // 3. Resolver conflicto alineando la fila histórica (o renombrando) y reintentar explícitamente
     db.prepare('UPDATE tasks SET title = ? WHERE id = ?').run('Título Nuevo En v16', 'task_conflict');
     const retryRes = migFull.executeMigration({ retryResolvedConflict: true });
-    assert.equal(retryRes.current_version, 18);
+    assert.equal(retryRes.current_version, 19);
 
     const reportsAfterFix = migFull.getLegacyMigrationReports();
     assert.equal(reportsAfterFix.length, 2);

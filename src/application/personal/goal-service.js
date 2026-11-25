@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ERROR_CODES, NexusError } from '../../shared/errors.js';
 import { GOAL_TRANSITIONS, assertTransition, validateGoalInput } from '../../domain/personal/personal-validators.js';
+import { normalizeResourceImpact } from '../../domain/personal/goal-resource-contract.js';
 
 export function createGoalService({ personalRepository, auditService = null, clock = null }) {
   const nowIso = () => (clock ? clock.nowIso() : new Date().toISOString());
@@ -9,6 +10,10 @@ export function createGoalService({ personalRepository, auditService = null, clo
     createGoal(input) {
       validateGoalInput(input, false);
       const now = nowIso();
+      const rawImpact = input.resourceImpact !== undefined ? input.resourceImpact : input.resource_impact;
+      const resourceImpact = rawImpact !== undefined && rawImpact !== null
+        ? normalizeResourceImpact(rawImpact)
+        : null;
       const goal = {
         id: randomUUID(),
         name: input.name.trim(),
@@ -18,6 +23,7 @@ export function createGoalService({ personalRepository, auditService = null, clo
         horizon: input.horizon ?? 'MEDIUM_TERM',
         target_date: input.target_date ?? null,
         status: input.status ?? 'ACTIVE',
+        resourceImpact,
         created_at: now,
         updated_at: now,
         archived_at: null,
@@ -48,6 +54,11 @@ export function createGoalService({ personalRepository, auditService = null, clo
       validateGoalInput(patch, true);
       if (patch.status !== undefined) assertTransition(GOAL_TRANSITIONS, current.status, patch.status, 'Goal');
       const now = nowIso();
+      const hasImpactPatch = patch.resourceImpact !== undefined || patch.resource_impact !== undefined;
+      const rawImpactPatch = patch.resourceImpact !== undefined ? patch.resourceImpact : patch.resource_impact;
+      const nextResourceImpact = hasImpactPatch
+        ? (rawImpactPatch === null ? null : normalizeResourceImpact(rawImpactPatch))
+        : (current.resourceImpact ?? null);
       const updated = {
         ...current,
         name: patch.name !== undefined ? patch.name.trim() : current.name,
@@ -57,6 +68,7 @@ export function createGoalService({ personalRepository, auditService = null, clo
         horizon: patch.horizon !== undefined ? patch.horizon : current.horizon,
         target_date: patch.target_date !== undefined ? patch.target_date : current.target_date,
         status: patch.status ?? current.status,
+        resourceImpact: nextResourceImpact,
         updated_at: now,
         archived_at: (patch.status ?? current.status) === 'ARCHIVED' ? (current.archived_at ?? now) : current.archived_at,
       };

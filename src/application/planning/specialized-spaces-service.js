@@ -22,6 +22,51 @@ function parseIsoDateParts(isoDateStr) {
   return { year, month, day, periodKey: `${year}-${String(month).padStart(2, '0')}` };
 }
 
+function computeIsoWeekKey(year, month, day) {
+  const d = new Date(Date.UTC(year, month - 1, day));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const isoYear = d.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${isoYear}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+function computePeriodKey(isoDateStr, frequency = 'monthly') {
+  const { year, month, day } = parseIsoDateParts(isoDateStr);
+  const freq = String(frequency || 'monthly').toLowerCase();
+  const mm = String(month).padStart(2, '0');
+  if (freq === 'annual') return String(year);
+  if (freq === 'biweekly') return `${year}-${mm}-${day <= 15 ? 'Q1' : 'Q2'}`;
+  if (freq === 'weekly') return computeIsoWeekKey(year, month, day);
+  return `${year}-${mm}`;
+}
+
+function isCommitmentDueNow(commitment, refParts) {
+  const freq = String(commitment.frequency || 'monthly').toLowerCase();
+  const dueDay = Number.isInteger(commitment.dueDayOfMonth) ? commitment.dueDayOfMonth : null;
+  const dueMonth = Number.isInteger(commitment.dueMonth) ? commitment.dueMonth : null;
+
+  if (freq === 'weekly') return true;
+
+  if (freq === 'annual') {
+    if (dueMonth !== null) {
+      return refParts.month > dueMonth || (refParts.month === dueMonth && refParts.day >= (dueDay ?? 1));
+    }
+    return dueDay === null || refParts.day >= dueDay;
+  }
+
+  if (freq === 'biweekly') {
+    if (dueDay === null) return true;
+    if (refParts.day <= 15) {
+      return dueDay > 15 ? false : refParts.day >= dueDay;
+    }
+    return dueDay <= 15 ? true : refParts.day >= dueDay;
+  }
+
+  return dueDay === null || refParts.day >= dueDay;
+}
+
 function daysBetweenIsoDates(olderIso, newerIso) {
   const a = parseIsoDateParts(olderIso);
   const b = parseIsoDateParts(newerIso);
@@ -146,8 +191,12 @@ export function createSpecializedSpacesService({ repository }) {
     }
 
     const nowIso = paidAt || new Date().toISOString();
-    const resolvedPeriod = periodKey || parseIsoDateParts(nowIso).periodKey;
     const state = repository.loadState();
+    const matchedCommitment = (state.profile?.recurringCommitments || []).find(
+      (c) => c.name.trim().toLowerCase() === commitmentName.trim().toLowerCase()
+    );
+    const resolvedPeriod =
+      periodKey || computePeriodKey(nowIso, matchedCommitment?.frequency || 'monthly');
 
     const payment = {
       id: `pay-${resolvedPeriod}-${commitmentName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${state.commitmentPayments.length + 1}`,
@@ -172,13 +221,13 @@ export function createSpecializedSpacesService({ repository }) {
 
     for (const commitment of commitments) {
       const dueDay = Number.isInteger(commitment.dueDayOfMonth) ? commitment.dueDayOfMonth : null;
-      const isDueNow = dueDay === null || refParts.day >= dueDay;
-      if (!isDueNow) continue;
+      if (!isCommitmentDueNow(commitment, refParts)) continue;
 
+      const expectedPeriodKey = computePeriodKey(referenceDate, commitment.frequency || 'monthly');
       const hasPayment = state.commitmentPayments.some(
         (p) =>
           p.commitmentName.trim().toLowerCase() === commitment.name.trim().toLowerCase() &&
-          p.periodKey === refParts.periodKey
+          p.periodKey === expectedPeriodKey
       );
 
       if (!hasPayment) {
@@ -187,8 +236,8 @@ export function createSpecializedSpacesService({ repository }) {
           expectedAmount: commitment.amount,
           frequency: commitment.frequency,
           dueDayOfMonth: dueDay,
-          periodKey: refParts.periodKey,
-          prompt: `No se ha registrado el pago de "${commitment.name}" ($${commitment.amount}) para el periodo ${refParts.periodKey}. ¿Se pagó, se canceló o se pospuso?`,
+          periodKey: expectedPeriodKey,
+          prompt: `No se ha registrado el pago de "${commitment.name}" ($${commitment.amount}) para el periodo ${expectedPeriodKey}. ¿Se pagó, se canceló o se pospuso?`,
         });
       }
     }

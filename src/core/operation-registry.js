@@ -6,6 +6,8 @@ import {
 } from '../application/planning/saturday-review-orchestrator.js';
 import { closeWeekAndAnalyze } from '../application/planning/weekly-execution-tracker.js';
 import { formatDeterministicSaturdayBriefing } from '../integration/ai/copilot-proposal-bridge.js';
+import { CLINICAL_RANGES } from '../domain/personal/clinical-reference-library.js';
+import { STANDARD_EXERCISES } from '../domain/knowledge/exercise-library-contract.js';
 
 export function createOperationRegistry(core) {
   const specs = new Map();
@@ -370,6 +372,10 @@ export function createOperationRegistry(core) {
     { sensitivity: 'SENSITIVE' }
   );
   q('spaces.baselines.list', 'planning', () => core.specializedSpacesService.listBaselines());
+  q('spaces.catalog', 'personal', () => ({
+    clinicalRanges: CLINICAL_RANGES,
+    standardExercises: STANDARD_EXERCISES,
+  }), { sensitivity: 'PUBLIC', description: 'Catálogo canónico de rangos clínicos y ejercicios estándar.' });
   q('spaces.baselines.get', 'planning', req => {
     const id = req.payload?.id ?? req.payload?.baselineId;
     const ctx = core.specializedSpacesService.getExecutionContext(id);
@@ -415,13 +421,24 @@ export function createOperationRegistry(core) {
     ),
     { sensitivity: 'SENSITIVE' }
   );
-  m('spaces.commitments.pay', 'finance', 'CREATE', req =>
-    core.specializedSpacesService.recordCommitmentPayment({
+  m('spaces.commitments.pay', 'finance', 'CREATE', req => {
+    const paidAt = req.payload?.paidAt ?? core.clock.nowIso();
+    const payment = core.specializedSpacesService.recordCommitmentPayment({
       ...req.payload,
-      paidAt: req.payload?.paidAt ?? core.clock.nowIso(),
-    }),
-    { sensitivity: 'SENSITIVE' }
-  );
+      paidAt,
+    });
+    if (req.payload?.account_id) {
+      const financeTransaction = core.financialTransactionService.recordExpense({
+        account_id: req.payload.account_id,
+        amount: req.payload.amount,
+        category: req.payload.category ?? 'recurring_commitment',
+        description: `Pago compromiso: ${req.payload.commitmentName}`,
+        occurred_at: paidAt,
+      });
+      return { ...payment, financeTransaction };
+    }
+    return payment;
+  }, { sensitivity: 'SENSITIVE' });
   m('saturday.review.prepare', 'planning', 'EXECUTE', req => {
     const p = req.payload ?? {};
     const assembled = core.weeklyContextAssembler.assembleWeeklyInputs({

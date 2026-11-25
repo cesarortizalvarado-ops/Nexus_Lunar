@@ -1,16 +1,43 @@
 import { validateRecipe } from '../../domain/knowledge/recipe-contract.js';
 
-function parseIsoDayAndHour(isoString, weekStartDate) {
+const WEEKDAY_MAP = Object.freeze({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 });
+
+function addDaysIso(isoDate, days) {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}
+
+function getLocalDateParts(isoString, timezone = 'UTC') {
   if (!isoString) return null;
   const dt = new Date(isoString);
   if (Number.isNaN(dt.getTime())) return null;
-  const start = new Date(`${weekStartDate}T00:00:00.000Z`);
-  const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
-  if (dt < start || dt >= end) return null;
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(dt).map((p) => [p.type, p.value]));
+  const hourNum = Number(parts.hour) === 24 ? 0 : Number(parts.hour);
+  const minuteNum = Number(parts.minute);
   return {
-    dayOfWeek: dt.getUTCDay(),
-    hour: Number((dt.getUTCHours() + dt.getUTCMinutes() / 60).toFixed(2)),
+    dateStr: `${parts.year}-${parts.month}-${parts.day}`,
+    dayOfWeek: WEEKDAY_MAP[parts.weekday],
+    hour: Number((hourNum + minuteNum / 60).toFixed(2)),
   };
+}
+
+function parseIsoDayAndHour(isoString, weekStartDate, timezone = 'UTC') {
+  const local = getLocalDateParts(isoString, timezone);
+  if (!local) return null;
+  const weekEndDate = addDaysIso(weekStartDate, 7);
+  if (local.dateStr < weekStartDate || local.dateStr >= weekEndDate) return null;
+  return { dayOfWeek: local.dayOfWeek, hour: local.hour, dateStr: local.dateStr };
 }
 
 function tryExtractRecipeFromDocument(doc) {
@@ -56,6 +83,7 @@ export function createWeeklyContextAssembler({
     currentInventory = null,
   } = {}) {
     const resolvedWeekStart = weekStartDate || clock.todayDate();
+    const tz = clock?.timezone ?? 'UTC';
 
     // 1. Metas activas desde personal-repository (si no se pasan explícitamente)
     let resolvedGoals = activeGoals;
@@ -70,21 +98,20 @@ export function createWeeklyContextAssembler({
         }));
     }
 
-    // 2. Compromisos y eventos fijos dentro de los 7 días de la semana
+    // 2. Compromisos y eventos fijos dentro de los 7 días de la semana en la zona horaria local
     let resolvedCommitments = fixedCommitments;
     if (!Array.isArray(resolvedCommitments)) {
       resolvedCommitments = [];
-      const weekEnd = new Date(new Date(`${resolvedWeekStart}T00:00:00.000Z`).getTime() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10);
+      const queryFrom = `${addDaysIso(resolvedWeekStart, -1)}T00:00:00.000Z`;
+      const queryTo = `${addDaysIso(resolvedWeekStart, 8)}T23:59:59.999Z`;
 
       const events = calendarService?.listEvents
-        ? calendarService.listEvents({ from: `${resolvedWeekStart}T00:00:00.000Z`, to: `${weekEnd}T23:59:59.999Z` })
+        ? calendarService.listEvents({ from: queryFrom, to: queryTo })
         : [];
       for (const ev of Array.isArray(events) ? events : []) {
         if (String(ev.status || '').toUpperCase() === 'CANCELLED') continue;
-        const startInfo = parseIsoDayAndHour(ev.start_at || ev.startAt, resolvedWeekStart);
-        const endInfo = parseIsoDayAndHour(ev.end_at || ev.endAt, resolvedWeekStart);
+        const startInfo = parseIsoDayAndHour(ev.start_at || ev.startAt, resolvedWeekStart, tz);
+        const endInfo = parseIsoDayAndHour(ev.end_at || ev.endAt, resolvedWeekStart, tz);
         if (startInfo && endInfo && startInfo.dayOfWeek === endInfo.dayOfWeek && endInfo.hour > startInfo.hour) {
           resolvedCommitments.push({
             id: ev.id,
@@ -99,15 +126,26 @@ export function createWeeklyContextAssembler({
       const rawCommitments = commitmentService?.listCommitments ? commitmentService.listCommitments({}) : [];
       for (const c of Array.isArray(rawCommitments) ? rawCommitments : []) {
         if (['COMPLETED', 'CANCELLED'].includes(String(c.status || '').toUpperCase())) continue;
-        const startInfo = parseIsoDayAndHour(c.start_at || c.due_at, resolvedWeekStart);
-        const endInfo = parseIsoDayAndHour(c.end_at, resolvedWeekStart);
-        if (startInfo && endInfo && startInfo.dayOfWeek === endInfo.dayOfWeek && endInfo.hour > startInfo.hour) {
+        const startInfo = parseIsoDayAndHour(c.start_at || c.due_at, resolvedWeekStart, tz);
+        if (!startInfo) continue;
+
+        let endHour = null;
+        if (c.end_at) {
+          const endInfo = parseIsoDayAndHour(c.end_at, resolvedWeekStart, tz);
+          if (endInfo && endInfo.dayOfWeek === startInfo.dayOfWeek) {
+            endHour = endInfo.hour;
+          }
+        } else {
+          endHour = Math.min(24, Number((startInfo.hour + 1).toFixed(2)));
+        }
+
+        if (endHour !== null && endHour > startInfo.hour) {
           resolvedCommitments.push({
             id: c.id,
             title: c.title || c.name || 'Compromiso',
             dayOfWeek: startInfo.dayOfWeek,
             startHour: startInfo.hour,
-            endHour: endInfo.hour,
+            endHour,
           });
         }
       }

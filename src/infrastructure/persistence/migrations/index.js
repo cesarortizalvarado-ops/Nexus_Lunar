@@ -9,6 +9,7 @@ import { migrationV15Adaptation } from './v15-adaptation.js';
 import { migrationV16AIPrepared } from './v16-ai-prepared.js';
 import { migrationV17ConsolidateLegacyData } from './v17-consolidate-legacy-data.js';
 import { migrationV18SpecializedSpaces } from './v18-specialized-spaces.js';
+import { migrationV19GoalResourceImpact } from './v19-goal-resource-impact.js';
 
 export const BASE_MIGRATIONS = [
   {
@@ -304,5 +305,5 @@ export const BASE_MIGRATIONS = [
 ];
 
 export function getAllMigrations(extraMigrations = []) {
-  return [...BASE_MIGRATIONS, migrationV08Memory, migrationV09Personal, migrationV10TimeExecution, migrationV11FinanceInventory, migrationV12Knowledge, migrationV13HabitsRoutines, migrationV14Planning, migrationV15Adaptation, migrationV16AIPrepared, migrationV17ConsolidateLegacyData, migrationV18SpecializedSpaces, ...extraMigrations].sort((a, b) => a.version - b.version);
+  return [...BASE_MIGRATIONS, migrationV08Memory, migrationV09Personal, migrationV10TimeExecution, migrationV11FinanceInventory, migrationV12Knowledge, migrationV13HabitsRoutines, migrationV14Planning, migrationV15Adaptation, migrationV16AIPrepared, migrationV17ConsolidateLegacyData, migrationV18SpecializedSpaces, migrationV19GoalResourceImpact, ...extraMigrations].sort((a, b) => a.version - b.version);
 }

@@ -1,3 +1,19 @@
+function hydrateGoal(row) {
+  if (!row) return null;
+  let resourceImpact = null;
+  if (row.resource_impact_json) {
+    try {
+      resourceImpact = JSON.parse(row.resource_impact_json);
+    } catch {
+      resourceImpact = null;
+    }
+  }
+  return {
+    ...row,
+    resourceImpact,
+  };
+}
+
 export function createPersonalRepository(persistenceService) {
   return {
     listPriorities() {
@@ -22,15 +38,16 @@ export function createPersonalRepository(persistenceService) {
     // Goals
     insertGoal(g) {
       const db = persistenceService.getDatabase();
+      const resourceImpactJson = g.resourceImpact ? JSON.stringify(g.resourceImpact) : null;
       db.prepare(`
-        INSERT INTO goals (id, name, description, desired_outcome, priority_id, horizon, target_date, status, created_at, updated_at, archived_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(g.id, g.name, g.description, g.desired_outcome, g.priority_id, g.horizon, g.target_date, g.status, g.created_at, g.updated_at, g.archived_at);
-      return g;
+        INSERT INTO goals (id, name, description, desired_outcome, priority_id, horizon, target_date, status, resource_impact_json, created_at, updated_at, archived_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(g.id, g.name, g.description, g.desired_outcome, g.priority_id, g.horizon, g.target_date, g.status, resourceImpactJson, g.created_at, g.updated_at, g.archived_at);
+      return hydrateGoal({ ...g, resource_impact_json: resourceImpactJson });
     },
 
     findGoalById(id) {
-      return persistenceService.getReadDatabase().prepare('SELECT * FROM goals WHERE id = ?').get(id) ?? null;
+      return hydrateGoal(persistenceService.getReadDatabase().prepare('SELECT * FROM goals WHERE id = ?').get(id) ?? null);
     },
 
     listGoals({ status = null, q = null } = {}) {
@@ -39,15 +56,16 @@ export function createPersonalRepository(persistenceService) {
         SELECT * FROM goals
         WHERE (? IS NULL OR status = ?) AND (? IS NULL OR name LIKE ? OR description LIKE ?)
         ORDER BY created_at DESC
-      `).all(status, status, s, s, s);
+      `).all(status, status, s, s, s).map(hydrateGoal);
     },
 
     updateGoal(g) {
+      const resourceImpactJson = g.resourceImpact ? JSON.stringify(g.resourceImpact) : null;
       persistenceService.getDatabase().prepare(`
-        UPDATE goals SET name=?, description=?, desired_outcome=?, priority_id=?, horizon=?, target_date=?, status=?, updated_at=?, archived_at=?
+        UPDATE goals SET name=?, description=?, desired_outcome=?, priority_id=?, horizon=?, target_date=?, status=?, resource_impact_json=?, updated_at=?, archived_at=?
         WHERE id=?
-      `).run(g.name, g.description, g.desired_outcome, g.priority_id, g.horizon, g.target_date, g.status, g.updated_at, g.archived_at, g.id);
-      return g;
+      `).run(g.name, g.description, g.desired_outcome, g.priority_id, g.horizon, g.target_date, g.status, resourceImpactJson, g.updated_at, g.archived_at, g.id);
+      return hydrateGoal({ ...g, resource_impact_json: resourceImpactJson });
     },
 
     insertGoalOutcome(o) {
