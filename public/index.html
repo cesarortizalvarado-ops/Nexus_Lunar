@@ -3,42 +3,91 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#11101a">
-  <title>Nexus Lunar — Núcleo Local</title>
+  <meta name="theme-color" content="#0b0d14">
+  <title>Nexus Lunar — Centro Operativo Local</title>
   <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <div class="shell">
-    <aside class="sidebar">
-      <a class="brand" href="/"><span class="moon">◐</span><span>NEXUS <b>LUNAR</b><small>LOCAL CORE</small></span></a>
-      <div class="nav-label">NÚCLEO</div>
-      <button class="nav active" data-view="overview">Resumen</button>
-      <button class="nav" data-view="memory">Memoria</button>
-      <button class="nav" data-view="personal">Objetivos · Proyectos · Tareas</button>
-      <button class="nav" data-view="time">Calendario y Disponibilidad</button>
-      <button class="nav" data-view="habits">Hábitos y Rutinas</button>
-      <button class="nav" data-view="resources">Finanzas e Inventario</button>
-      <button class="nav" data-view="knowledge">Bibliotecas</button>
-      <button class="nav" data-view="planning">Planificación y Cierre</button>
-      <button class="nav" data-view="system">Módulos · Respaldos · IA</button>
-      <div class="sidebar-bottom"><span class="status-dot"></span> Núcleo local activo<small>127.0.0.1 · Offline · Sin IA real</small></div>
-    </aside>
-    <main class="main">
-      <header class="topbar">
-        <div>
-          <div class="eyebrow">NEXUS LUNAR / <span id="section-name">RESUMEN</span></div>
-          <h1 id="page-title">Sistema personal local y modular</h1>
+  <div class="app-shell" id="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
+      <div class="sidebar-header">
+        <a class="brand" href="/">
+          <span class="brand-glyph" aria-hidden="true">◐</span>
+          <span class="brand-text">
+            <strong>NEXUS LUNAR</strong>
+            <small>LOCAL-FIRST CORE</small>
+          </span>
+        </a>
+        <button type="button" class="icon-btn sidebar-toggle" id="sidebar-toggle" aria-expanded="true" aria-controls="main-nav" title="Colapsar barra lateral">☰</button>
+      </div>
+
+      <div class="nav-section-label">OPERACIÓN SEMANAL</div>
+      <nav class="nav-tabs" id="main-nav" role="tablist" aria-label="Vistas de Nexus Lunar">
+        <button type="button" class="nav-tab active" role="tab" id="tab-week" aria-selected="true" aria-controls="view-content" data-view="week" tabindex="0">
+          <span class="nav-icon" aria-hidden="true">◫</span>
+          <span class="nav-label">Semana Activa</span>
+          <kbd class="nav-kbd">Alt+1</kbd>
+        </button>
+        <button type="button" class="nav-tab" role="tab" id="tab-saturday" aria-selected="false" aria-controls="view-content" data-view="saturday" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">◈</span>
+          <span class="nav-label">Revisión Sábado</span>
+          <kbd class="nav-kbd">Alt+2</kbd>
+        </button>
+        <button type="button" class="nav-tab" role="tab" id="tab-spaces" aria-selected="false" aria-controls="view-content" data-view="spaces" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">❖</span>
+          <span class="nav-label">Espacios</span>
+          <kbd class="nav-kbd">Alt+3</kbd>
+        </button>
+        <button type="button" class="nav-tab" role="tab" id="tab-copilot" aria-selected="false" aria-controls="view-content" data-view="copilot" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">✦</span>
+          <span class="nav-label">Copiloto Seguro</span>
+          <kbd class="nav-kbd">Alt+4</kbd>
+        </button>
+        <button type="button" class="nav-tab" role="tab" id="tab-system" aria-selected="false" aria-controls="view-content" data-view="system" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">⚙</span>
+          <span class="nav-label">Núcleo y Respaldos</span>
+          <kbd class="nav-kbd">Alt+5</kbd>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="core-badge">
+          <span class="status-dot" id="sidebar-status-dot"></span>
+          <span id="sidebar-status-text">Conectando núcleo...</span>
         </div>
-        <div class="top-actions">
-          <span class="local-pill">LOCAL · OFFLINE</span>
-          <button class="icon-button" id="refresh" title="Actualizar">↻</button>
+        <small id="sidebar-meta">127.0.0.1 · Sin transmisión externa</small>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="topbar-title-group">
+          <div class="eyebrow">NEXUS LUNAR / <span id="section-name">SEMANA ACTIVA Y BASELINE INMUTABLE</span></div>
+          <h1 id="page-title">Semana Activa y Baseline Inmutable</h1>
+        </div>
+        <div class="topbar-actions">
+          <div class="health-chip" id="health-chip">
+            <span class="status-dot"></span>
+            <span id="health-chip-text">v18 · LOCAL</span>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="quick-backup-btn" title="Crear respaldo local inmediato">Respaldar ahora</button>
+          <button type="button" class="icon-btn" id="refresh-btn" title="Actualizar vista actual" aria-label="Actualizar vista">↻</button>
         </div>
       </header>
-      <div id="notice" class="notice" role="status" hidden></div>
-      <section id="view-content" class="stack"></section>
-      <footer>NEXUS LUNAR <span>·</span> <span id="footer-version">1.0.0-experimental</span> <span>·</span> Operación local sobre servicios del núcleo.</footer>
+
+      <section id="view-content" class="view-container" role="tabpanel" aria-labelledby="tab-week"></section>
+
+      <footer class="app-footer">
+        <span>NEXUS LUNAR</span>
+        <span class="sep">·</span>
+        <span id="footer-version">1.0.0-experimental</span>
+        <span class="sep">·</span>
+        <span>Arquitectura local-first determinista</span>
+      </footer>
     </main>
   </div>
+
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 </body>
 </html>
