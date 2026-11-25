@@ -1,5 +1,5 @@
 import { createConfig } from '../config.js';
-import { createClock } from '../shared/clock.js';
+import { addDays, createClock, dayOfWeekUtc } from '../shared/clock.js';
 import { ERROR_CODES, NexusError } from '../shared/errors.js';
 import { createEventService } from './event-service.js';
 import { createAuditService } from './audit-service.js';
@@ -31,6 +31,7 @@ import { createPlanningRepository } from '../infrastructure/repositories/plannin
 import { createAdaptationRepository } from '../infrastructure/repositories/adaptation-repository.js';
 import { createAIRepository } from '../infrastructure/repositories/ai-repository.js';
 import { createSpecializedSpacesRepository } from '../infrastructure/repositories/specialized-spaces-repository.js';
+import { createWellbeingRepository } from '../infrastructure/repositories/wellbeing-repository.js';
 
 import { createEntityReferenceResolver } from '../application/shared/entity-reference-resolver.js';
 import { createRelationService } from '../application/shared/relation-service.js';
@@ -54,9 +55,13 @@ import { createPlanningEngine } from '../application/planning/planning-engine.js
 import { createPlanningInputService, createPlanningService, createPlanningProposalService, createAgendaService, createDailyReviewService } from '../application/planning/planning-services.js';
 import { createSpecializedSpacesService } from '../application/planning/specialized-spaces-service.js';
 import { createWeeklyContextAssembler } from '../application/planning/weekly-context-assembler.js';
+import { prepareSaturdayReview } from '../application/planning/saturday-review-orchestrator.js';
+import { createWellbeingService } from '../application/personal/wellbeing-service.js';
+import { createDashboardAggregatorService } from '../application/dashboard/dashboard-aggregator-service.js';
 import { createAdaptiveAnalysisService, createProactivityService } from '../application/adaptation/adaptation-services.js';
 import { createAIProviderRegistry, createAIConversationService, createAIContextService, createAIToolService, createAIOperationService, createAIInteractionService } from '../integration/ai/ai-services.js';
-import { createCopilotProposalBridge, createOllamaTransport, probeOllamaHealth } from '../integration/ai/copilot-proposal-bridge.js';
+import { createCopilotProposalBridge, createOllamaTransport, formatDeterministicSaturdayBriefing, probeOllamaHealth } from '../integration/ai/copilot-proposal-bridge.js';
+import { createCopilotChatService } from '../integration/ai/copilot-chat-service.js';
 import { createCIOContractBridge } from '../integration/cio/cio-contract.js';
 import { markdownAdapter, csvAdapter, jsonAdapter } from '../integration/importers/text-adapters.js';
 import { xlsxAdapter } from '../integration/importers/xlsx-adapter.js';
@@ -120,6 +125,7 @@ export function createNexusCore(configOverrides = {}) {
   const adaptationRepo = createAdaptationRepository(persistenceService);
   const aiRepo = createAIRepository(persistenceService);
   const specializedSpacesRepo = createSpecializedSpacesRepository({ persistenceService });
+  const wellbeingRepo = createWellbeingRepository(persistenceService);
 
   const referenceResolver = createEntityReferenceResolver({
     memoryRepository: memoryRepo,
@@ -276,6 +282,60 @@ export function createNexusCore(configOverrides = {}) {
     ? createOllamaTransport({ endpoint: cfg.ollamaEndpoint, model: cfg.ollamaModel || 'qwen2.5:7b' })
     : null;
   const copilotBridge = createCopilotProposalBridge({ transport: copilotTransport });
+  const wellbeingService = createWellbeingService({
+    wellbeingRepository: wellbeingRepo,
+    auditService,
+    clock,
+  });
+  const dashboardAggregatorService = createDashboardAggregatorService({
+    habitService,
+    wellbeingService,
+    goalService,
+    projectService,
+    taskService,
+    financialTransactionService,
+    financialCommitmentService,
+    calendarService,
+    commitmentService,
+    specializedSpacesService,
+    clock,
+  });
+  const copilotChatService = createCopilotChatService({
+    aiConversationService,
+    copilotBridge,
+    dashboardAggregatorService,
+    specializedSpacesService,
+    prepareSaturdayReviewFn: ({
+      referenceDate = clock.todayDate(),
+      weeklyGroceryBudget = 1200,
+      exerciseScheduleRequests = [],
+    } = {}) => {
+      const dow = dayOfWeekUtc(referenceDate);
+      const daysUntilMonday = dow === 0 ? 1 : (8 - dow);
+      const nextWeekStartDate = addDays(referenceDate, daysUntilMonday);
+      const assembled = weeklyContextAssembler.assembleWeeklyInputs({ weekStartDate: nextWeekStartDate });
+      const review = prepareSaturdayReview({
+        spacesService: specializedSpacesService,
+        previousBaselineId: null,
+        nextWeekStartDate,
+        referenceDate,
+        activeGoals: assembled.activeGoals,
+        fixedCommitments: assembled.fixedCommitments,
+        libraries: assembled.libraries,
+        currentInventory: assembled.currentInventory,
+        weeklyGroceryBudget,
+        exerciseScheduleRequests,
+      });
+      return {
+        ...review,
+        briefingMarkdown: formatDeterministicSaturdayBriefing(review),
+      };
+    },
+    clock,
+    ollamaConfig: cfg.ollamaEndpoint
+      ? { endpoint: cfg.ollamaEndpoint, model: cfg.ollamaModel || 'qwen2.5:7b' }
+      : null,
+  });
   const doctorService = createDoctorService({
     storageHealthService,
     backupService,
@@ -351,6 +411,8 @@ export function createNexusCore(configOverrides = {}) {
     dailyReviewService,
     specializedSpacesService,
     weeklyContextAssembler,
+    wellbeingService,
+    dashboardAggregatorService,
     adaptiveAnalysisService,
     proactivityService,
     // Integraciones preparadas
@@ -362,6 +424,7 @@ export function createNexusCore(configOverrides = {}) {
     aiInteractionService,
     cioBridge,
     copilotBridge,
+    copilotChatService,
 
     initialize() {
       if (initialized) return systemService.getSystemStatus();

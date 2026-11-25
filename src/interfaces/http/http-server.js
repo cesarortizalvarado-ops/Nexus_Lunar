@@ -184,6 +184,23 @@ const HTTP_REST_ROUTE_DEFINITIONS = Object.freeze([
   { method: 'GET', path: '/api/goals', status: 200, operation_type: 'goals.list' },
   { method: 'POST', path: '/api/goals', status: 201, operation_type: 'goals.create', readBody: true },
   {
+    method: 'PATCH',
+    path: '/api/goals/:id/status',
+    regex: /^\/api\/goals\/([^/]+)\/status$/,
+    status: 200,
+    operation_type: 'goals.changeStatus',
+    readBody: true,
+    buildPayload: ({ match, body }) => ({ ...body, id: decodeURIComponent(match[1]) }),
+  },
+  {
+    method: 'DELETE',
+    path: '/api/goals/:id',
+    regex: /^\/api\/goals\/([^/]+)$/,
+    status: 200,
+    operation_type: 'goals.archive',
+    buildPayload: ({ match }) => ({ id: decodeURIComponent(match[1]) }),
+  },
+  {
     method: 'GET',
     path: '/api/projects',
     status: 200,
@@ -191,6 +208,23 @@ const HTTP_REST_ROUTE_DEFINITIONS = Object.freeze([
     buildPayload: ({ url }) => ({ status: url.searchParams.get('status') }),
   },
   { method: 'POST', path: '/api/projects', status: 201, operation_type: 'projects.create', readBody: true },
+  {
+    method: 'PATCH',
+    path: '/api/projects/:id/status',
+    regex: /^\/api\/projects\/([^/]+)\/status$/,
+    status: 200,
+    operation_type: 'projects.changeStatus',
+    readBody: true,
+    buildPayload: ({ match, body }) => ({ ...body, id: decodeURIComponent(match[1]) }),
+  },
+  {
+    method: 'DELETE',
+    path: '/api/projects/:id',
+    regex: /^\/api\/projects\/([^/]+)$/,
+    status: 200,
+    operation_type: 'projects.archive',
+    buildPayload: ({ match }) => ({ id: decodeURIComponent(match[1]) }),
+  },
   {
     method: 'GET',
     path: '/api/tasks',
@@ -207,6 +241,14 @@ const HTTP_REST_ROUTE_DEFINITIONS = Object.freeze([
     operation_type: 'tasks.changeStatus',
     readBody: true,
     buildPayload: ({ match, body }) => ({ id: decodeURIComponent(match[1]), status: body.status }),
+  },
+  {
+    method: 'DELETE',
+    path: '/api/tasks/:id',
+    regex: /^\/api\/tasks\/([^/]+)$/,
+    status: 200,
+    operation_type: 'tasks.archive',
+    buildPayload: ({ match }) => ({ id: decodeURIComponent(match[1]) }),
   },
 
   // Tiempo y disponibilidad
@@ -246,12 +288,50 @@ const HTTP_REST_ROUTE_DEFINITIONS = Object.freeze([
   { method: 'GET', path: '/api/finance/summary', status: 200, operation_type: 'finance.summary' },
   { method: 'GET', path: '/api/finance/accounts', status: 200, operation_type: 'finance.accounts.list' },
   { method: 'POST', path: '/api/finance/accounts', status: 201, operation_type: 'finance.accounts.create', readBody: true },
+  {
+    method: 'GET',
+    path: '/api/finance/transactions',
+    status: 200,
+    operation_type: 'finance.transactions.list',
+    buildPayload: ({ url }) => ({
+      account_id: url.searchParams.get('account_id'),
+      transaction_type: url.searchParams.get('type') ?? url.searchParams.get('transaction_type'),
+      category: url.searchParams.get('category'),
+      from: url.searchParams.get('from'),
+      to: url.searchParams.get('to'),
+    }),
+  },
+  { method: 'POST', path: '/api/finance/income', status: 201, operation_type: 'finance.recordIncome', readBody: true },
+  { method: 'POST', path: '/api/finance/expense', status: 201, operation_type: 'finance.recordExpense', readBody: true },
   { method: 'GET', path: '/api/inventory/products', status: 200, operation_type: 'inventory.products.list' },
   { method: 'POST', path: '/api/inventory/products', status: 201, operation_type: 'inventory.products.create', readBody: true },
+  {
+    method: 'GET',
+    path: '/api/inventory/stock',
+    status: 200,
+    operation_type: 'inventory.stock.list',
+    buildPayload: ({ url }) => ({
+      product_id: url.searchParams.get('product_id'),
+      location: url.searchParams.get('location') ?? undefined,
+    }),
+  },
+  { method: 'POST', path: '/api/inventory/stock', status: 201, operation_type: 'inventory.stock.register', readBody: true },
+  { method: 'POST', path: '/api/inventory/consumption', status: 201, operation_type: 'inventory.consumption.record', readBody: true },
 
   // Bibliotecas
   { method: 'GET', path: '/api/libraries', status: 200, operation_type: 'knowledge.libraries.list' },
   { method: 'POST', path: '/api/libraries', status: 201, operation_type: 'knowledge.libraries.create', readBody: true },
+  {
+    method: 'GET',
+    path: '/api/knowledge/documents',
+    status: 200,
+    operation_type: 'knowledge.documents.search',
+    buildPayload: ({ url }) => ({
+      library_id: url.searchParams.get('library_id'),
+      q: url.searchParams.get('q'),
+    }),
+  },
+  { method: 'POST', path: '/api/knowledge/documents', status: 201, operation_type: 'knowledge.documents.create', readBody: true },
   { method: 'POST', path: '/api/knowledge/seed-starter', status: 201, operation_type: 'knowledge.seedStarter' },
 
   // Planificación y Adaptación
@@ -345,6 +425,83 @@ const HTTP_REST_ROUTE_DEFINITIONS = Object.freeze([
     buildPayload: ({ match, body }) => ({ ...body, baselineId: decodeURIComponent(match[1]) }),
   },
   { method: 'POST', path: '/api/copilot/proposals', status: 200, operation_type: 'copilot.proposals.draft', readBody: true },
+
+  // Bienestar emocional y Fechas importantes
+  {
+    method: 'GET',
+    path: '/api/wellbeing/moods',
+    status: 200,
+    operation_type: 'wellbeing.mood.list',
+    buildPayload: ({ url }) => ({ from: url.searchParams.get('from'), to: url.searchParams.get('to') }),
+  },
+  { method: 'POST', path: '/api/wellbeing/moods', status: 201, operation_type: 'wellbeing.mood.record', readBody: true },
+  {
+    method: 'GET',
+    path: '/api/wellbeing/important-dates',
+    status: 200,
+    operation_type: 'wellbeing.dates.list',
+    buildPayload: ({ url }) => ({
+      category: url.searchParams.get('category'),
+      month: url.searchParams.get('month') ? Number(url.searchParams.get('month')) : undefined,
+      status: url.searchParams.get('status') ?? 'ACTIVE',
+    }),
+  },
+  { method: 'POST', path: '/api/wellbeing/important-dates', status: 201, operation_type: 'wellbeing.dates.create', readBody: true },
+  {
+    method: 'PATCH',
+    path: '/api/wellbeing/important-dates/:id',
+    regex: /^\/api\/wellbeing\/important-dates\/([^/]+)$/,
+    status: 200,
+    operation_type: 'wellbeing.dates.update',
+    readBody: true,
+    buildPayload: ({ match, body }) => ({ ...body, id: decodeURIComponent(match[1]) }),
+  },
+  {
+    method: 'DELETE',
+    path: '/api/wellbeing/important-dates/:id',
+    regex: /^\/api\/wellbeing\/important-dates\/([^/]+)$/,
+    status: 200,
+    operation_type: 'wellbeing.dates.archive',
+    buildPayload: ({ match }) => ({ id: decodeURIComponent(match[1]) }),
+  },
+
+  // Dashboards analíticos y Calendario Maestro
+  {
+    method: 'GET',
+    path: '/api/dashboard/habits-mood',
+    status: 200,
+    operation_type: 'dashboard.habitsMood',
+    buildPayload: ({ url }) => ({ from: url.searchParams.get('from'), to: url.searchParams.get('to') }),
+  },
+  {
+    method: 'GET',
+    path: '/api/dashboard/projects-goals',
+    status: 200,
+    operation_type: 'dashboard.projectsGoals',
+    buildPayload: ({ url, core }) => ({ referenceDate: url.searchParams.get('referenceDate') ?? core.clock.todayDate() }),
+  },
+  {
+    method: 'GET',
+    path: '/api/dashboard/calendar',
+    status: 200,
+    operation_type: 'dashboard.masterCalendar',
+    buildPayload: ({ url }) => ({
+      year: url.searchParams.get('year') ? Number(url.searchParams.get('year')) : undefined,
+      month: url.searchParams.get('month') ? Number(url.searchParams.get('month')) : undefined,
+    }),
+  },
+
+  // Chat persistente unificado del Copiloto
+  { method: 'GET', path: '/api/copilot/conversations', status: 200, operation_type: 'copilot.chat.list' },
+  {
+    method: 'GET',
+    path: '/api/copilot/conversations/:id/messages',
+    regex: /^\/api\/copilot\/conversations\/([^/]+)\/messages$/,
+    status: 200,
+    operation_type: 'copilot.chat.messages',
+    buildPayload: ({ match }) => ({ id: decodeURIComponent(match[1]) }),
+  },
+  { method: 'POST', path: '/api/copilot/chat', status: 200, operation_type: 'copilot.chat.send', readBody: true },
 ]);
 
 export function getHttpRouteDefinitions() {

@@ -503,6 +503,22 @@ export function createOperationRegistry(core) {
     { async: true, atomic: false }
   );
 
+  // === WELLBEING, DASHBOARDS, MASTER CALENDAR & COPILOT CHAT ===
+  q('wellbeing.mood.list', 'personal', req => core.wellbeingService.listMoodEntries(req.payload ?? {}), { sensitivity: 'SENSITIVE' });
+  m('wellbeing.mood.record', 'personal', 'CREATE', req => core.wellbeingService.recordMoodEntry(req.payload), { sensitivity: 'SENSITIVE' });
+  q('wellbeing.dates.list', 'time', req => core.wellbeingService.listImportantDates(req.payload ?? {}));
+  m('wellbeing.dates.create', 'time', 'CREATE', req => core.wellbeingService.createImportantDate(req.payload));
+  m('wellbeing.dates.update', 'time', 'UPDATE', req => core.wellbeingService.updateImportantDate(req.payload.id, req.payload));
+  m('wellbeing.dates.archive', 'time', 'ARCHIVE', req => core.wellbeingService.archiveImportantDate(req.payload.id));
+
+  q('dashboard.habitsMood', 'personal', req => core.dashboardAggregatorService.getHabitsAndMoodDashboard(req.payload ?? {}), { sensitivity: 'SENSITIVE' });
+  q('dashboard.projectsGoals', 'personal', req => core.dashboardAggregatorService.getProjectsAndGoalsDashboard(req.payload ?? {}), { sensitivity: 'SENSITIVE' });
+  q('dashboard.masterCalendar', 'time', req => core.dashboardAggregatorService.getMasterCalendar(req.payload ?? {}), { sensitivity: 'SENSITIVE' });
+
+  q('copilot.chat.list', 'ai_prepared', req => core.copilotChatService.listConversations(req.payload ?? {}), { sensitivity: 'INTERNAL' });
+  q('copilot.chat.messages', 'ai_prepared', req => core.copilotChatService.getConversationMessages(req.payload.id ?? req.payload.conversationId), { sensitivity: 'SENSITIVE' });
+  m('copilot.chat.send', 'ai_prepared', 'EXECUTE', req => core.copilotChatService.sendMessage(req.payload ?? {}), { async: true, atomic: false, sensitivity: 'SENSITIVE' });
+
   return {
     registerOperation: register,
 

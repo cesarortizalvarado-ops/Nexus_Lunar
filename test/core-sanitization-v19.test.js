@@ -63,7 +63,7 @@ test('V19 · 1 — Persistencia real de resourceImpact en SQLite v19 y detecció
   });
 
   try {
-    assert.equal(core.persistenceService.getSchemaVersion(), 19);
+    assert.equal(core.persistenceService.getSchemaVersion(), 20);
 
     // Flujo quincenal libre: 5000 - 3000 = 2000 MXN
     await core.executeOperationAsync({

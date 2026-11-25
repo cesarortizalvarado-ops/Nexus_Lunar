@@ -551,7 +551,7 @@ if (isDirectTestEntry) {
 
     try {
       const baseSnap = captureDatabaseSnapshot(roDb);
-      assert.equal(baseSnap.table_count, 97, 'Debe inspeccionar las 97 tablas persistentes de aplicación del esquema v18');
+      assert.equal(baseSnap.table_count, 99, 'Debe inspeccionar las 99 tablas persistentes de aplicación del esquema v20');
       assert.ok(baseSnap.tables.replenishment_cycles, 'Incluye tablas fuera de las 13 anteriores como replenishment_cycles');
       assert.deepEqual(baseSnap.tables.goal_tasks.primary_key, ['goal_id', 'task_id'], 'Reconoce claves primarias compuestas');
 

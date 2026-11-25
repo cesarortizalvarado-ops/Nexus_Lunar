@@ -29,7 +29,8 @@ Dominios y acciones principales:
   planning weekly|daily|approve|review|close [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--date YYYY-MM-DD] [--proposal-id <id>]
   spaces snapshot|unpaid|pay [--date YYYY-MM-DD] [--name "..."] [--amount 100]
   saturday prepare|baselines|baseline [<id>] [--start YYYY-MM-DD] [--budget 1000] [--date YYYY-MM-DD]
-  copilot draft --text "<texto>"
+  dashboard habits|projects|calendar [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--date YYYY-MM-DD]
+  copilot draft|chat --text "<texto>" [--id <conversation_id>] [--date YYYY-MM-DD]
   adaptation patterns|suggestions|accept|apply [<id> | --id <id>] [--authorized-by <usuario>]
   audit list [--limit 20]
   health inspect
@@ -303,8 +304,35 @@ export async function runCli(argv = process.argv.slice(2), configOverrides = {},
       usage(out);
       return 2;
     }
+    if (domain === 'dashboard') {
+      if (action === 'habits') {
+        return await execOp('dashboard.habitsMood', {
+          from: values.start ?? null,
+          to: values.end ?? null,
+        });
+      }
+      if (action === 'projects') {
+        return await execOp('dashboard.projectsGoals', {
+          referenceDate: values.date ?? core.clock.todayDate(),
+        });
+      }
+      if (action === 'calendar') {
+        const refDate = values.date ?? core.clock.todayDate();
+        const [year, month] = refDate.split('-').map(Number);
+        return await execOp('dashboard.masterCalendar', { year, month });
+      }
+      usage(out);
+      return 2;
+    }
     if (domain === 'copilot') {
       if (action === 'draft') return await execOp('copilot.proposals.draft', { text: values.text ?? '' });
+      if (action === 'chat') {
+        return await execOp('copilot.chat.send', {
+          conversationId: targetId,
+          message: values.text ?? '',
+          referenceDate: values.date ?? core.clock.todayDate(),
+        });
+      }
       usage(out);
       return 2;
     }
