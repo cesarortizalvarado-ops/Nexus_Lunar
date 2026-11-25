@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11101a">
+  <title>Nexus Lunar — Núcleo Local</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="/"><span class="moon">◐</span><span>NEXUS <b>LUNAR</b><small>LOCAL CORE</small></span></a>
+      <div class="nav-label">NÚCLEO</div>
+      <button class="nav active" data-view="overview">Resumen</button>
+      <button class="nav" data-view="memory">Memoria</button>
+      <button class="nav" data-view="personal">Objetivos · Proyectos · Tareas</button>
+      <button class="nav" data-view="time">Calendario y Disponibilidad</button>
+      <button class="nav" data-view="habits">Hábitos y Rutinas</button>
+      <button class="nav" data-view="resources">Finanzas e Inventario</button>
+      <button class="nav" data-view="knowledge">Bibliotecas</button>
+      <button class="nav" data-view="planning">Planificación y Cierre</button>
+      <button class="nav" data-view="system">Módulos · Respaldos · IA</button>
+      <div class="sidebar-bottom"><span class="status-dot"></span> Núcleo local activo<small>127.0.0.1 · Offline · Sin IA real</small></div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">NEXUS LUNAR / <span id="section-name">RESUMEN</span></div>
+          <h1 id="page-title">Sistema personal local y modular</h1>
+        </div>
+        <div class="top-actions">
+          <span class="local-pill">LOCAL · OFFLINE</span>
+          <button class="icon-button" id="refresh" title="Actualizar">↻</button>
+        </div>
+      </header>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <section id="view-content" class="stack"></section>
+      <footer>NEXUS LUNAR <span>·</span> <span id="footer-version">1.0.0-experimental</span> <span>·</span> Operación local sobre servicios del núcleo.</footer>
+    </main>
+  </div>
+</body>
+</html>

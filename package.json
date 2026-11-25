@@ -1,0 +1,24 @@
+{
+  "name": "nexus-lunar",
+  "version": "1.0.0-experimental",
+  "private": true,
+  "type": "module",
+  "description": "Núcleo local modular de Nexus Lunar con persistencia, seguridad, planificación determinista e infraestructura preparada para IA",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "optionalDependencies": {
+    "exceljs": "^4.4.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "cli": "node src/interfaces/cli/nexus-cli.js",
+    "test": "node --test",
+    "check": "node --check src/index.js src/core/nexus-core.js src/interfaces/cli/nexus-cli.js src/infrastructure/database-cli.js public/app.js",
+    "db:backup": "node src/infrastructure/database-cli.js backup",
+    "db:list": "node src/infrastructure/database-cli.js list",
+    "db:verify": "node src/infrastructure/database-cli.js verify",
+    "db:restore": "node src/infrastructure/database-cli.js restore"
+  }
+}
