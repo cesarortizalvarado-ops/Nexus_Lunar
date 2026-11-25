@@ -115,6 +115,57 @@ function deterministicFallbackExtract(text) {
   return proposals;
 }
 
+export async function probeOllamaHealth({ endpoint = null, timeoutMs = 2000 } = {}) {
+  if (!endpoint || typeof endpoint !== 'string' || !endpoint.trim()) {
+    return {
+      configured: false,
+      available: false,
+      mode: 'deterministic_only',
+      models: [],
+    };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const parsedUrl = new URL(endpoint);
+    const tagsUrl = `${parsedUrl.origin}/api/tags`;
+    const response = await fetch(tagsUrl, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return {
+        configured: true,
+        available: false,
+        mode: 'deterministic_fallback',
+        endpoint,
+        error: `OLLAMA_HTTP_${response.status}`,
+        models: [],
+      };
+    }
+    const data = await response.json();
+    return {
+      configured: true,
+      available: true,
+      mode: 'ai_ready',
+      endpoint,
+      models: Array.isArray(data?.models) ? data.models.map((m) => m.name) : [],
+    };
+  } catch (err) {
+    return {
+      configured: true,
+      available: false,
+      mode: 'deterministic_fallback',
+      endpoint,
+      error: err.message,
+      models: [],
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function createOllamaTransport({
   endpoint = 'http://127.0.0.1:11434/api/generate',
   model = 'qwen2.5:7b',

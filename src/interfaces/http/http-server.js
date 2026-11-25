@@ -160,6 +160,13 @@ export function assertHttpMethodOperationCompatibility(httpMethod, spec, { rpcEn
 
 const HTTP_REST_ROUTE_DEFINITIONS = Object.freeze([
   { method: 'GET', path: '/api/system/status', status: 200, operation_type: 'system.status' },
+  {
+    method: 'GET',
+    path: '/api/system/doctor',
+    status: 200,
+    operation_type: 'system.doctor',
+    buildPayload: ({ url, core }) => ({ referenceDate: url.searchParams.get('referenceDate') ?? core.clock.todayDate() }),
+  },
   { method: 'GET', path: '/api/health/storage', status: 200, operation_type: 'persistence.health' },
   { method: 'GET', path: '/api/modules', status: 200, operation_type: 'modules.list' },
 
@@ -245,6 +252,7 @@ const HTTP_REST_ROUTE_DEFINITIONS = Object.freeze([
   // Bibliotecas
   { method: 'GET', path: '/api/libraries', status: 200, operation_type: 'knowledge.libraries.list' },
   { method: 'POST', path: '/api/libraries', status: 201, operation_type: 'knowledge.libraries.create', readBody: true },
+  { method: 'POST', path: '/api/knowledge/seed-starter', status: 201, operation_type: 'knowledge.seedStarter' },
 
   // Planificación y Adaptación
   { method: 'GET', path: '/api/planning/plans', status: 200, operation_type: 'planning.plans.list' },

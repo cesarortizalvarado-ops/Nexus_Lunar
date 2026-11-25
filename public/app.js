@@ -54,6 +54,8 @@ const state = {
   tasks: [],
   habits: [],
   backups: [],
+  seedResult: null,
+  doctorReport: null,
   draftEmployments: null,
   draftCommitments: null,
 };
@@ -836,19 +838,61 @@ async function renderSystemView() {
   state.habits = habits;
   state.backups = backups;
 
+  const storageOk = Boolean(
+    storageHealth.ok ??
+    (storageHealth.integrity?.ok && storageHealth.files_integrity?.ok && !storageHealth.recovery?.recovery_mode)
+  );
+  const schemaVersion =
+    storageHealth.schema_version ??
+    storageHealth.metadata?.schema_version ??
+    storageHealth.migrations?.current_version ??
+    state.health?.schema_version ??
+    '-';
+
   contentEl.innerHTML = `
     <article class="card">
       <div class="card-head">
         <h2>Estado del Núcleo Local</h2>
-        <span class="badge ${storageHealth.ok ? 'badge-ok' : 'badge-err'}">${storageHealth.ok ? 'Almacenamiento Íntegro' : 'Revisar Almacenamiento'}</span>
+        <span class="badge ${storageOk ? 'badge-ok' : 'badge-err'}">${storageOk ? 'Almacenamiento Íntegro' : 'Revisar Almacenamiento'}</span>
       </div>
       <div class="stats-grid">
-        <div class="stat-box"><span>ESQUEMA SQLITE</span><strong>v${escapeHtml(storageHealth.schema_version)}</strong><small>Integridad: ${escapeHtml(storageHealth.integrity?.ok ? 'OK' : 'WARN')}</small></div>
+        <div class="stat-box"><span>ESQUEMA SQLITE</span><strong>v${escapeHtml(schemaVersion)}</strong><small>Integridad: ${escapeHtml(storageHealth.integrity?.ok ? 'OK' : 'WARN')}</small></div>
         <div class="stat-box"><span>MÓDULOS ACTIVOS</span><strong>${modules.filter((m) => m.status === 'AVAILABLE').length}/${modules.length}</strong></div>
         <div class="stat-box"><span>METAS / TAREAS / HÁBITOS</span><strong>${goals.length} / ${tasks.length} / ${habits.length}</strong></div>
         <div class="stat-box"><span>RESPALDOS LOCALES</span><strong>${backups.length}</strong></div>
       </div>
     </article>
+
+    <div class="grid-2">
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Biblioteca Inicial MX</h3>
+            <small>27 insumos de despensa con costo en MXN y 15 recetas saludables</small>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="seed-starter-btn">Cargar Biblioteca Inicial (15 Recetas MX + Despensa)</button>
+        </div>
+        ${state.seedResult ? `
+          <div class="alert-banner ok">
+            <span>
+              <strong>Catálogo sincronizado:</strong> ${state.seedResult.productsCreated} productos creados (${state.seedResult.productsExisting} existentes) ·
+              ${state.seedResult.recipesCreated} recetas creadas (${state.seedResult.recipesExisting} existentes).
+            </span>
+          </div>
+        ` : '<small style="color:var(--text-secondary);">Carga idempotente: no duplica productos ni recetas si ya existen.</small>'}
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Diagnóstico Operativo (Doctor)</h3>
+            <small>Verifica SQLite v18, firmas SHA-256, bibliotecas, respaldos y sonda Ollama</small>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="run-doctor-btn">Ejecutar Diagnóstico (Doctor)</button>
+        </div>
+        ${state.doctorReport ? renderDoctorCard(state.doctorReport) : '<small style="color:var(--text-secondary);">Ejecuta el diagnóstico para verificar el estado integral del núcleo.</small>'}
+      </article>
+    </div>
 
     <div class="grid-3">
       <article class="card">
@@ -906,6 +950,30 @@ async function renderSystemView() {
         </table>
       </div>
     </article>
+  `;
+}
+
+function renderDoctorCard(report) {
+  const badgeClass = report.status === 'OK' ? 'badge-ok' : (report.status === 'WARN' ? 'badge-warn' : 'badge-err');
+  const { storage, backups, baselines, libraries, ai } = report.checks;
+  return `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="list-row">
+        <span>Estado global del núcleo</span>
+        <span class="badge ${badgeClass}">${escapeHtml(report.status)}</span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-box"><span>SQLITE</span><strong>v${escapeHtml(storage.schema_version)}</strong><small>${storage.ok ? 'Íntegro' : 'Error'}</small></div>
+        <div class="stat-box"><span>BASELINES SHA-256</span><strong>${baselines.validCount}/${baselines.total}</strong><small>Corruptas: ${baselines.corruptedIds.length}</small></div>
+        <div class="stat-box"><span>RECETAS / INSUMOS</span><strong>${libraries.recipesCount} / ${libraries.inventoryProductsCount}</strong><small>Respaldos: ${backups.count}</small></div>
+        <div class="stat-box"><span>IA / OLLAMA</span><strong>${escapeHtml(ai.mode)}</strong><small>${ai.available ? `${ai.models.length} modelos` : 'Modo determinista activo'}</small></div>
+      </div>
+      ${report.recommendations.length > 0 ? `
+        <div class="list-stack">
+          ${report.recommendations.map((rec) => `<div class="alert-banner warn"><span>${escapeHtml(rec)}</span></div>`).join('')}
+        </div>
+      ` : '<div class="alert-banner ok"><span>Todas las verificaciones operativas están listas.</span></div>'}
+    </div>
   `;
 }
 
@@ -1140,6 +1208,30 @@ contentEl.addEventListener('click', async (e) => {
     try {
       const bkp = await apiFetch('/api/backups', { method: 'POST', body: JSON.stringify({ reason: 'web-system' }) });
       showToast(`Respaldo ${bkp.id} creado.`, { type: 'ok' });
+      await renderCurrentView();
+    } catch (err) {
+      showToast(err.message, { type: 'err', remediation: err.remediation });
+    }
+    return;
+  }
+
+  if (e.target.id === 'seed-starter-btn') {
+    try {
+      const result = await apiFetch('/api/knowledge/seed-starter', { method: 'POST', body: JSON.stringify({}) });
+      state.seedResult = result;
+      showToast(`Catálogo cargado: ${result.recipesCreated} recetas nuevas, ${result.productsCreated} insumos nuevos.`, { type: 'ok' });
+      await renderCurrentView();
+    } catch (err) {
+      showToast(err.message, { type: 'err', remediation: err.remediation });
+    }
+    return;
+  }
+
+  if (e.target.id === 'run-doctor-btn') {
+    try {
+      const report = await apiFetch('/api/system/doctor');
+      state.doctorReport = report;
+      showToast(`Diagnóstico Doctor completado (${report.status}).`, { type: report.status === 'ERROR' ? 'err' : 'ok' });
       await renderCurrentView();
     } catch (err) {
       showToast(err.message, { type: 'err', remediation: err.remediation });

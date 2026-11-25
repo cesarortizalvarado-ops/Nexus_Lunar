@@ -24,7 +24,8 @@ Dominios y acciones principales:
   executions start|list [--entity-type task] [--entity-id <id>]
   finance account|income|expense|summary [--name "..."] [--currency MXN] [--account-id <id>] [--amount 100]
   inventory product|stock|replenishment [--name "..."] [--unit g] [<id> | --id <id>]
-  libraries create|list|import|export [--name "..."] [<id> | --id <id>] [--format MARKDOWN|CSV|JSON|XLSX] [--file path]
+  libraries create|list|seed|import|export [--name "..."] [<id> | --id <id>] [--format MARKDOWN|CSV|JSON|XLSX] [--file path]
+  doctor [--date YYYY-MM-DD]
   planning weekly|daily|approve|review|close [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--date YYYY-MM-DD] [--proposal-id <id>]
   spaces snapshot|unpaid|pay [--date YYYY-MM-DD] [--name "..."] [--amount 100]
   saturday prepare|baselines|baseline [<id>] [--start YYYY-MM-DD] [--budget 1000] [--date YYYY-MM-DD]
@@ -246,10 +247,14 @@ export async function runCli(argv = process.argv.slice(2), configOverrides = {},
     if (domain === 'libraries') {
       if (action === 'create') return await execOp('knowledge.libraries.create', { name: values.name });
       if (action === 'list') return await execOp('knowledge.libraries.list');
+      if (action === 'seed') return await execOp('knowledge.seedStarter');
       if (action === 'import') return await execOp('knowledge.import', { library_id: targetId, source_format: values.format, source_reference: values.file });
       if (action === 'export') return await execOp('knowledge.export', { library_id: targetId, target_format: values.format, destination: values.file });
       usage(out);
       return 2;
+    }
+    if (domain === 'doctor') {
+      return await execOp('system.doctor', { referenceDate: values.date ?? core.clock.todayDate() });
     }
     if (domain === 'planning') {
       if (action === 'weekly') return await execOp('planning.generateWeekly', { week_start: values.start, week_end: values.end });

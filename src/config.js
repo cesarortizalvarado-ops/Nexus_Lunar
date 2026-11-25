@@ -17,6 +17,8 @@ export function createConfig(overrides = {}) {
     timezone: overrides.timezone ?? process.env.NEXUS_LUNAR_TIMEZONE ?? 'UTC',
     allowPublicBind: Boolean(overrides.allowPublicBind ?? false),
     externalTransmissionAllowed: Boolean(overrides.externalTransmissionAllowed ?? false),
+    ollamaEndpoint: overrides.ollamaEndpoint ?? process.env.NEXUS_LUNAR_OLLAMA_ENDPOINT ?? process.env.OLLAMA_ENDPOINT ?? null,
+    ollamaModel: overrides.ollamaModel ?? process.env.NEXUS_LUNAR_OLLAMA_MODEL ?? process.env.OLLAMA_MODEL ?? 'qwen2.5:7b',
   };
 }
 

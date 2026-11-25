@@ -46,6 +46,8 @@ import { createExecutionService, createWorkSessionService, createOutcomeService,
 import { createFinancialAccountService, createFinancialTransactionService, createBudgetService, createReserveService, createFinancialCommitmentService } from '../application/finance/finance-services.js';
 import { createProductService, createInventoryService, createPurchaseService, createPaymentService, createConsumptionService, createReplenishmentService } from '../application/inventory/inventory-services.js';
 import { createLibraryService, createKnowledgeDocumentService, createImportService, createExportService } from '../application/knowledge/knowledge-services.js';
+import { createStarterLibrarySeeder } from '../application/knowledge/starter-library-seeder.js';
+import { createDoctorService } from '../application/system/doctor-service.js';
 import { createHabitService } from '../application/habits/habit-service.js';
 import { createRoutineService } from '../application/routines/routine-service.js';
 import { createPlanningEngine } from '../application/planning/planning-engine.js';
@@ -54,7 +56,7 @@ import { createSpecializedSpacesService } from '../application/planning/speciali
 import { createWeeklyContextAssembler } from '../application/planning/weekly-context-assembler.js';
 import { createAdaptiveAnalysisService, createProactivityService } from '../application/adaptation/adaptation-services.js';
 import { createAIProviderRegistry, createAIConversationService, createAIContextService, createAIToolService, createAIOperationService, createAIInteractionService } from '../integration/ai/ai-services.js';
-import { createCopilotProposalBridge, createOllamaTransport } from '../integration/ai/copilot-proposal-bridge.js';
+import { createCopilotProposalBridge, createOllamaTransport, probeOllamaHealth } from '../integration/ai/copilot-proposal-bridge.js';
 import { createCIOContractBridge } from '../integration/cio/cio-contract.js';
 import { markdownAdapter, csvAdapter, jsonAdapter } from '../integration/importers/text-adapters.js';
 import { xlsxAdapter } from '../integration/importers/xlsx-adapter.js';
@@ -188,6 +190,11 @@ export function createNexusCore(configOverrides = {}) {
     adapters: defaultFormatAdapters,
     clock,
   });
+  const starterLibrarySeeder = createStarterLibrarySeeder({
+    productService,
+    libraryService,
+    knowledgeDocumentService,
+  });
 
   const habitService = createHabitService({ habitRoutineRepository: habitRoutineRepo, transactionService, auditService, clock });
   const routineService = createRoutineService({ habitRoutineRepository: habitRoutineRepo, habitService, transactionService, auditService, clock });
@@ -269,6 +276,14 @@ export function createNexusCore(configOverrides = {}) {
     ? createOllamaTransport({ endpoint: cfg.ollamaEndpoint, model: cfg.ollamaModel || 'qwen2.5:7b' })
     : null;
   const copilotBridge = createCopilotProposalBridge({ transport: copilotTransport });
+  const doctorService = createDoctorService({
+    storageHealthService,
+    backupService,
+    specializedSpacesService,
+    weeklyContextAssembler,
+    clock,
+    ollamaProbe: () => probeOllamaHealth({ endpoint: cfg.ollamaEndpoint || null }),
+  });
 
   let initialized = false;
 
@@ -324,6 +339,8 @@ export function createNexusCore(configOverrides = {}) {
     knowledgeDocumentService,
     importService,
     exportService,
+    starterLibrarySeeder,
+    doctorService,
     habitService,
     routineService,
     planningInputService,

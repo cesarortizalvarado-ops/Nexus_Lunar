@@ -45,6 +45,7 @@ export function createOperationRegistry(core) {
 
   // === SYSTEM & MODULES ===
   q('system.status', 'system', () => core.systemService.getSystemStatus(), { sensitivity: 'INTERNAL', description: 'Estado general del núcleo y módulos.' });
+  q('system.doctor', 'system', async req => core.doctorService.runDiagnostics({ referenceDate: req.payload?.referenceDate ?? null }), { async: true, sensitivity: 'INTERNAL', bypassModuleCheck: true, description: 'Diagnóstico operativo integral de almacenamiento, baselines SHA-256, espacios, bibliotecas y sonda de IA.' });
   q('system.version', 'system', () => core.systemService.getVersion(), { sensitivity: 'PUBLIC' });
   q('system.config.get', 'system', () => core.systemService.getConfiguration(), { sensitivity: 'INTERNAL' });
   m('system.config.update', 'system', 'UPDATE', req => core.systemService.updateConfiguration(req.payload), { sensitivity: 'INTERNAL' });
@@ -272,6 +273,7 @@ export function createOperationRegistry(core) {
     const job = core.exportService.createExportJob(req.payload);
     return core.exportService.executeExport(job.id);
   }, { async: true, atomic: false, sensitivity: 'INTERNAL' });
+  m('knowledge.seedStarter', 'knowledge', 'CREATE', () => core.starterLibrarySeeder.seedStarterLibraries(), { sensitivity: 'INTERNAL', description: 'Siembra idempotente de 27 productos en MXN y 15 recetas base en SQLite.' });
 
   // === HABITS & ROUTINES ===
   q('habits.list', 'habits', req => core.habitService.listHabits(req.payload));
