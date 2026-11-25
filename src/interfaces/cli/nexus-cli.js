@@ -26,6 +26,9 @@ Dominios y acciones principales:
   inventory product|stock|replenishment [--name "..."] [--unit g] [<id> | --id <id>]
   libraries create|list|import|export [--name "..."] [<id> | --id <id>] [--format MARKDOWN|CSV|JSON|XLSX] [--file path]
   planning weekly|daily|approve|review|close [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--date YYYY-MM-DD] [--proposal-id <id>]
+  spaces snapshot|unpaid|pay [--date YYYY-MM-DD] [--name "..."] [--amount 100]
+  saturday prepare|baselines|baseline [<id>] [--start YYYY-MM-DD] [--budget 1000] [--date YYYY-MM-DD]
+  copilot draft --text "<texto>"
   adaptation patterns|suggestions|accept|apply [<id> | --id <id>] [--authorized-by <usuario>]
   audit list [--limit 20]
   health inspect
@@ -66,6 +69,8 @@ export async function runCli(argv = process.argv.slice(2), configOverrides = {},
       module: { type: 'string' },
       kind: { type: 'string' },
       json: { type: 'string' },
+      text: { type: 'string' },
+      budget: { type: 'string' },
       'idempotency-key': { type: 'string' },
       'authorized-by': { type: 'string' },
       'confirm-restore': { type: 'boolean' },
@@ -264,6 +269,37 @@ export async function runCli(argv = process.argv.slice(2), configOverrides = {},
           authorization: { approved: true, authorized_by: authorizer, scope: 'adaptation.applySuggestion' },
         });
       }
+      usage(out);
+      return 2;
+    }
+    if (domain === 'spaces') {
+      if (action === 'snapshot') return await execOp('spaces.snapshot', { referenceDate: values.date ?? core.clock.todayDate() });
+      if (action === 'unpaid') return await execOp('spaces.commitments.unpaid', { referenceDate: values.date ?? core.clock.todayDate() });
+      if (action === 'pay') {
+        return await execOp('spaces.commitments.pay', {
+          commitmentName: values.name,
+          amount: Number(values.amount),
+          paidAt: values.date ?? core.clock.nowIso(),
+        });
+      }
+      usage(out);
+      return 2;
+    }
+    if (domain === 'saturday') {
+      if (action === 'prepare') {
+        return await execOp('saturday.review.prepare', {
+          nextWeekStartDate: values.start ?? core.clock.todayDate(),
+          weeklyGroceryBudget: values.budget !== undefined ? Number(values.budget) : 0,
+          referenceDate: values.date ?? core.clock.todayDate(),
+        });
+      }
+      if (action === 'baselines') return await execOp('spaces.baselines.list');
+      if (action === 'baseline') return await execOp('spaces.baselines.get', { id: targetId });
+      usage(out);
+      return 2;
+    }
+    if (domain === 'copilot') {
+      if (action === 'draft') return await execOp('copilot.proposals.draft', { text: values.text ?? '' });
       usage(out);
       return 2;
     }

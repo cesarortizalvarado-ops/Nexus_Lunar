@@ -30,6 +30,7 @@ import { createHabitRoutineRepository } from '../infrastructure/repositories/hab
 import { createPlanningRepository } from '../infrastructure/repositories/planning-repository.js';
 import { createAdaptationRepository } from '../infrastructure/repositories/adaptation-repository.js';
 import { createAIRepository } from '../infrastructure/repositories/ai-repository.js';
+import { createSpecializedSpacesRepository } from '../infrastructure/repositories/specialized-spaces-repository.js';
 
 import { createEntityReferenceResolver } from '../application/shared/entity-reference-resolver.js';
 import { createRelationService } from '../application/shared/relation-service.js';
@@ -49,8 +50,11 @@ import { createHabitService } from '../application/habits/habit-service.js';
 import { createRoutineService } from '../application/routines/routine-service.js';
 import { createPlanningEngine } from '../application/planning/planning-engine.js';
 import { createPlanningInputService, createPlanningService, createPlanningProposalService, createAgendaService, createDailyReviewService } from '../application/planning/planning-services.js';
+import { createSpecializedSpacesService } from '../application/planning/specialized-spaces-service.js';
+import { createWeeklyContextAssembler } from '../application/planning/weekly-context-assembler.js';
 import { createAdaptiveAnalysisService, createProactivityService } from '../application/adaptation/adaptation-services.js';
 import { createAIProviderRegistry, createAIConversationService, createAIContextService, createAIToolService, createAIOperationService, createAIInteractionService } from '../integration/ai/ai-services.js';
+import { createCopilotProposalBridge, createOllamaTransport } from '../integration/ai/copilot-proposal-bridge.js';
 import { createCIOContractBridge } from '../integration/cio/cio-contract.js';
 import { markdownAdapter, csvAdapter, jsonAdapter } from '../integration/importers/text-adapters.js';
 import { xlsxAdapter } from '../integration/importers/xlsx-adapter.js';
@@ -113,6 +117,7 @@ export function createNexusCore(configOverrides = {}) {
   const planningRepo = createPlanningRepository(persistenceService);
   const adaptationRepo = createAdaptationRepository(persistenceService);
   const aiRepo = createAIRepository(persistenceService);
+  const specializedSpacesRepo = createSpecializedSpacesRepository({ persistenceService });
 
   const referenceResolver = createEntityReferenceResolver({
     memoryRepository: memoryRepo,
@@ -216,6 +221,16 @@ export function createNexusCore(configOverrides = {}) {
   });
   const agendaService = createAgendaService({ planningService, planningProposalService, planningRepository: planningRepo, clock });
   const dailyReviewService = createDailyReviewService({ planningRepository: planningRepo, executionService, habitService, routineService, clock });
+  const specializedSpacesService = createSpecializedSpacesService({ repository: specializedSpacesRepo });
+  const weeklyContextAssembler = createWeeklyContextAssembler({
+    goalService,
+    calendarService,
+    commitmentService,
+    productService,
+    inventoryService,
+    knowledgeDocumentService,
+    clock,
+  });
 
   const adaptiveAnalysisService = createAdaptiveAnalysisService({
     adaptationRepository: adaptationRepo,
@@ -250,6 +265,10 @@ export function createNexusCore(configOverrides = {}) {
     contextService: aiContextService,
   });
   const cioBridge = createCIOContractBridge({ memoryService, sourceService, transactionService });
+  const copilotTransport = cfg.ollamaEndpoint
+    ? createOllamaTransport({ endpoint: cfg.ollamaEndpoint, model: cfg.ollamaModel || 'qwen2.5:7b' })
+    : null;
+  const copilotBridge = createCopilotProposalBridge({ transport: copilotTransport });
 
   let initialized = false;
 
@@ -313,6 +332,8 @@ export function createNexusCore(configOverrides = {}) {
     planningProposalService,
     agendaService,
     dailyReviewService,
+    specializedSpacesService,
+    weeklyContextAssembler,
     adaptiveAnalysisService,
     proactivityService,
     // Integraciones preparadas
@@ -323,6 +344,7 @@ export function createNexusCore(configOverrides = {}) {
     aiOperationService,
     aiInteractionService,
     cioBridge,
+    copilotBridge,
 
     initialize() {
       if (initialized) return systemService.getSystemStatus();

@@ -1,5 +1,11 @@
 import { ERROR_CODES, NexusError, normalizeError } from '../shared/errors.js';
 import { errorResponse, createOperationRequest } from './operation-contract.js';
+import {
+  prepareSaturdayReview,
+  approveSaturdayDraft,
+} from '../application/planning/saturday-review-orchestrator.js';
+import { closeWeekAndAnalyze } from '../application/planning/weekly-execution-tracker.js';
+import { formatDeterministicSaturdayBriefing } from '../integration/ai/copilot-proposal-bridge.js';
 
 export function createOperationRegistry(core) {
   const specs = new Map();
@@ -343,6 +349,140 @@ export function createOperationRegistry(core) {
   m('ai.proposals.execute', 'ai_prepared', 'EXECUTE', req => core.aiOperationService.executeOperation(req.payload.id), { sensitiveOperation: true, sensitivity: 'SENSITIVE' });
   q('cio.contract', 'ai_prepared', () => core.cioBridge.getContractInfo(), { sensitivity: 'PUBLIC' });
   m('cio.receiveSignal', 'ai_prepared', 'CREATE', req => core.cioBridge.receiveExternalSignal(req.payload));
+
+  // === SPECIALIZED SPACES, SATURDAY ORCHESTRATOR & COPILOT BRIDGE ===
+  q('spaces.snapshot', 'personal', req => {
+    const referenceDate = req.payload?.referenceDate ?? core.clock.todayDate();
+    const snap = core.specializedSpacesService.getSnapshot();
+    return {
+      profile: snap.profile,
+      biometricsUpdatedAt: snap.biometricsUpdatedAt,
+      latestClinicalPanel: core.specializedSpacesService.getLatestClinicalPanel(),
+      unpaidCommitments: core.specializedSpacesService.detectUnpaidCommitments(referenceDate),
+      biometricFreshness: core.specializedSpacesService.checkBiometricFreshness(referenceDate),
+      baselines: core.specializedSpacesService.listBaselines(),
+    };
+  });
+  q('spaces.commitments.unpaid', 'finance', req =>
+    core.specializedSpacesService.detectUnpaidCommitments(req.payload?.referenceDate ?? core.clock.todayDate()),
+    { sensitivity: 'SENSITIVE' }
+  );
+  q('spaces.baselines.list', 'planning', () => core.specializedSpacesService.listBaselines());
+  q('spaces.baselines.get', 'planning', req => {
+    const id = req.payload?.id ?? req.payload?.baselineId;
+    const ctx = core.specializedSpacesService.getExecutionContext(id);
+    if (!ctx) {
+      throw new NexusError(ERROR_CODES.NOT_FOUND, `Baseline semanal no encontrada: ${id}`, {
+        entity: 'WeeklyBaseline',
+      });
+    }
+    return {
+      baseline: ctx.baseline,
+      executionLog: ctx.executionLog,
+      revisionsLog: ctx.revisionsLog,
+      analysis: closeWeekAndAnalyze(ctx.baseline, ctx.executionLog, ctx.revisionsLog),
+    };
+  });
+
+  m('spaces.profile.save', 'personal', 'CREATE', req =>
+    core.specializedSpacesService.saveProfile(req.payload?.profile ?? req.payload, {
+      recordedAt: req.payload?.recordedAt ?? core.clock.nowIso(),
+    })
+  );
+  m('spaces.biometrics.update', 'personal', 'UPDATE', req =>
+    core.specializedSpacesService.updateBiometricsSpace(req.payload?.biometrics ?? req.payload, {
+      recordedAt: req.payload?.recordedAt ?? core.clock.nowIso(),
+    })
+  );
+  m('spaces.clinical.record', 'personal', 'CREATE', req =>
+    core.specializedSpacesService.recordClinicalLabPanel(req.payload?.panel ?? req.payload, {
+      recordedAt: req.payload?.recordedAt ?? core.clock.nowIso(),
+    }),
+    { sensitivity: 'SENSITIVE' }
+  );
+  m('spaces.employments.update', 'personal', 'UPDATE', req =>
+    core.specializedSpacesService.updateEmploymentsSpace(req.payload?.employments, {
+      recordedAt: req.payload?.recordedAt ?? core.clock.nowIso(),
+    }),
+    { sensitivity: 'SENSITIVE' }
+  );
+  m('spaces.commitments.update', 'finance', 'UPDATE', req =>
+    core.specializedSpacesService.updateRecurringCommitmentsSpace(
+      req.payload?.recurringCommitments ?? req.payload?.commitments,
+      { recordedAt: req.payload?.recordedAt ?? core.clock.nowIso() }
+    ),
+    { sensitivity: 'SENSITIVE' }
+  );
+  m('spaces.commitments.pay', 'finance', 'CREATE', req =>
+    core.specializedSpacesService.recordCommitmentPayment({
+      ...req.payload,
+      paidAt: req.payload?.paidAt ?? core.clock.nowIso(),
+    }),
+    { sensitivity: 'SENSITIVE' }
+  );
+  m('saturday.review.prepare', 'planning', 'EXECUTE', req => {
+    const p = req.payload ?? {};
+    const assembled = core.weeklyContextAssembler.assembleWeeklyInputs({
+      weekStartDate: p.nextWeekStartDate ?? p.weekStartDate ?? core.clock.todayDate(),
+      activeGoals: p.activeGoals ?? null,
+      fixedCommitments: p.fixedCommitments ?? null,
+      libraries: p.libraries ?? null,
+      currentInventory: p.currentInventory ?? null,
+    });
+    const review = prepareSaturdayReview({
+      spacesService: core.specializedSpacesService,
+      previousBaselineId: p.previousBaselineId ?? null,
+      nextWeekStartDate: p.nextWeekStartDate ?? assembled.weekStartDate,
+      referenceDate: p.referenceDate ?? core.clock.todayDate(),
+      activeGoals: assembled.activeGoals,
+      fixedCommitments: assembled.fixedCommitments,
+      libraries: assembled.libraries,
+      currentInventory: assembled.currentInventory,
+      weeklyGroceryBudget: p.weeklyGroceryBudget !== undefined ? Number(p.weeklyGroceryBudget) : 0,
+      exerciseScheduleRequests: p.exerciseScheduleRequests ?? [],
+      preferences: p.preferences ?? {},
+    });
+    return {
+      ...review,
+      briefingMarkdown: formatDeterministicSaturdayBriefing(review),
+    };
+  }, { atomic: false });
+  m('saturday.baseline.approve', 'planning', 'APPROVE', req => {
+    if (req.source?.actor_type === 'AI_ASSISTANT') {
+      throw new NexusError(
+        ERROR_CODES.PERMISSION_DENIED,
+        'HUMAN_APPROVAL_REQUIRED: La IA no puede aprobar ni sellar la baseline semanal.',
+        { statusCode: 403 }
+      );
+    }
+    return approveSaturdayDraft({
+      spacesService: core.specializedSpacesService,
+      draft: req.payload?.draft,
+      baselineId: req.payload?.baselineId ?? null,
+      approvedAt: req.payload?.approvedAt ?? core.clock.nowIso(),
+      approvedBy: req.payload?.approvedBy ?? 'user',
+    });
+  });
+  m('week.execution.record', 'planning', 'CREATE', req =>
+    core.specializedSpacesService.appendExecutionRecord(req.payload?.baselineId ?? req.payload?.id, {
+      ...req.payload,
+      recordedAt: req.payload?.recordedAt ?? core.clock.nowIso(),
+    })
+  );
+  m('week.revision.record', 'planning', 'CREATE', req =>
+    core.specializedSpacesService.appendPlanRevision(req.payload?.baselineId ?? req.payload?.id, {
+      ...req.payload,
+      authorizedBy: req.payload?.authorizedBy ?? 'user',
+      recordedAt: req.payload?.recordedAt ?? core.clock.nowIso(),
+    })
+  );
+  m('copilot.proposals.draft', 'ai_prepared', 'EXECUTE', async req =>
+    core.copilotBridge.draftProposalsFromText({
+      text: req.payload?.text ?? '',
+      context: req.payload?.context ?? {},
+    }),
+    { async: true, atomic: false }
+  );
 
   return {
     registerOperation: register,

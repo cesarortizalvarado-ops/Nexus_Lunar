@@ -279,6 +279,58 @@ const HTTP_REST_ROUTE_DEFINITIONS = Object.freeze([
     readBody: true,
     buildPayload: ({ body }) => ({ reason: body?.reason ?? 'web-manual' }),
   },
+
+  // Espacios Especializados, Revisión del Sábado y Copiloto
+  {
+    method: 'GET',
+    path: '/api/spaces/snapshot',
+    status: 200,
+    operation_type: 'spaces.snapshot',
+    buildPayload: ({ url, core }) => ({ referenceDate: url.searchParams.get('referenceDate') ?? core.clock.todayDate() }),
+  },
+  { method: 'POST', path: '/api/spaces/profile', status: 201, operation_type: 'spaces.profile.save', readBody: true },
+  { method: 'PATCH', path: '/api/spaces/biometrics', status: 200, operation_type: 'spaces.biometrics.update', readBody: true },
+  { method: 'POST', path: '/api/spaces/clinical', status: 201, operation_type: 'spaces.clinical.record', readBody: true },
+  { method: 'PUT', path: '/api/spaces/employments', status: 200, operation_type: 'spaces.employments.update', readBody: true },
+  { method: 'PUT', path: '/api/spaces/commitments', status: 200, operation_type: 'spaces.commitments.update', readBody: true },
+  { method: 'POST', path: '/api/spaces/commitments/payments', status: 201, operation_type: 'spaces.commitments.pay', readBody: true },
+  {
+    method: 'GET',
+    path: '/api/spaces/commitments/unpaid',
+    status: 200,
+    operation_type: 'spaces.commitments.unpaid',
+    buildPayload: ({ url, core }) => ({ referenceDate: url.searchParams.get('referenceDate') ?? core.clock.todayDate() }),
+  },
+  { method: 'POST', path: '/api/planning/saturday/prepare', status: 200, operation_type: 'saturday.review.prepare', readBody: true },
+  { method: 'POST', path: '/api/planning/saturday/approve', status: 201, operation_type: 'saturday.baseline.approve', readBody: true },
+  { method: 'GET', path: '/api/planning/baselines', status: 200, operation_type: 'spaces.baselines.list' },
+  {
+    method: 'GET',
+    path: '/api/planning/baselines/:id',
+    regex: /^\/api\/planning\/baselines\/([^/]+)$/,
+    status: 200,
+    operation_type: 'spaces.baselines.get',
+    buildPayload: ({ match }) => ({ id: decodeURIComponent(match[1]) }),
+  },
+  {
+    method: 'POST',
+    path: '/api/planning/baselines/:id/executions',
+    regex: /^\/api\/planning\/baselines\/([^/]+)\/executions$/,
+    status: 201,
+    operation_type: 'week.execution.record',
+    readBody: true,
+    buildPayload: ({ match, body }) => ({ ...body, baselineId: decodeURIComponent(match[1]) }),
+  },
+  {
+    method: 'POST',
+    path: '/api/planning/baselines/:id/revisions',
+    regex: /^\/api\/planning\/baselines\/([^/]+)\/revisions$/,
+    status: 201,
+    operation_type: 'week.revision.record',
+    readBody: true,
+    buildPayload: ({ match, body }) => ({ ...body, baselineId: decodeURIComponent(match[1]) }),
+  },
+  { method: 'POST', path: '/api/copilot/proposals', status: 200, operation_type: 'copilot.proposals.draft', readBody: true },
 ]);
 
 export function getHttpRouteDefinitions() {

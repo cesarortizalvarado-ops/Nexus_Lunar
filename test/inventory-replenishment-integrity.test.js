@@ -512,7 +512,7 @@ test('NL-INT-002 · Escenarios 9 y 10 — Corrección CLI inventory stock <id> (
     try {
       const roDb = core.persistenceService.getReadDatabase();
       const globalSnapBefore = captureDatabaseSnapshot(roDb);
-      assert.equal(globalSnapBefore.table_count, 92);
+      assert.equal(globalSnapBefore.table_count, 97);
 
       const queryOperationsToVerify = [
         { operation_type: 'system.status', payload: {} },

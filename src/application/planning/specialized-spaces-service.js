@@ -286,6 +286,22 @@ export function createSpecializedSpacesService({ repository }) {
     };
   }
 
+  function listBaselines() {
+    const state = repository.loadState();
+    return Object.values(state.baselines || {})
+      .map((b) => ({
+        baselineId: b.baselineId,
+        weekStartDate: b.plan?.weekStartDate ?? null,
+        status: b.status,
+        approvedAt: b.approvedAt,
+        approvedBy: b.approvedBy,
+        integrityHash: b.integrityHash,
+        executionsCount: (state.executionLogs?.[b.baselineId] || []).length,
+        revisionsCount: (state.revisionsLogs?.[b.baselineId] || []).length,
+      }))
+      .sort((a, b) => String(b.weekStartDate || '').localeCompare(String(a.weekStartDate || '')));
+  }
+
   return {
     getSnapshot,
     saveProfile,
@@ -299,6 +315,7 @@ export function createSpecializedSpacesService({ repository }) {
     checkBiometricFreshness,
     saveBaseline,
     getBaseline,
+    listBaselines,
     appendExecutionRecord,
     appendPlanRevision,
     getExecutionContext,
