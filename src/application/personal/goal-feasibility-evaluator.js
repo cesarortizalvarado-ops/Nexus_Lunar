@@ -4,6 +4,12 @@ import {
   extractGoalResourceImpact,
   normalizeFinancialToBiweekly,
 } from '../../domain/personal/goal-resource-contract.js';
+import {
+  calculateBiweeklyCommitments,
+  calculateTotalBiweeklyIncome,
+  calculateTotalBlockedWeeklyHours,
+  normalizePersonalProfile,
+} from '../../domain/personal/personal-profile-contract.js';
 
 function round2(value) {
   return Number(Number(value).toFixed(2));
@@ -86,7 +92,7 @@ function buildDeterministicSuggestions(resourceLabel, unitLabel, competingGoals,
   return suggestions;
 }
 
-export function evaluateGoalFeasibility(activeGoals = [], resourceLimits = {}) {
+export function evaluateGoalFeasibility(activeGoals = [], resourceLimits = {}, userProfile = null) {
   if (activeGoals !== null && activeGoals !== undefined && !Array.isArray(activeGoals)) {
     throw new NexusError(
       ERROR_CODES.VALIDATION_ERROR,
@@ -95,7 +101,34 @@ export function evaluateGoalFeasibility(activeGoals = [], resourceLimits = {}) {
     );
   }
 
+  const resolvedProfileInput =
+    userProfile !== null && userProfile !== undefined
+      ? userProfile
+      : (resourceLimits && typeof resourceLimits === 'object' ? resourceLimits.userProfile ?? null : null);
+  const profile = resolvedProfileInput ? normalizePersonalProfile(resolvedProfileInput) : null;
+
   const limits = normalizeResourceLimits(resourceLimits);
+  if (profile) {
+    if (limits.freeCashFlowBiweekly === null) {
+      const projectedBiweeklyIncome = calculateTotalBiweeklyIncome(profile.employments);
+      const recurringCommitmentsCost = calculateBiweeklyCommitments(profile.recurringCommitments);
+      const fixedExpenses =
+        normalizeOptionalLimit(
+          resourceLimits?.fixedExpensesBiweekly ?? profile.fixedExpensesBiweekly ?? 0,
+          'fixedExpensesBiweekly'
+        ) ?? 0;
+      limits.freeCashFlowBiweekly = round2(
+        Math.max(0, projectedBiweeklyIncome - recurringCommitmentsCost - fixedExpenses)
+      );
+    }
+
+    if (limits.discretionaryWeeklyHours === null) {
+      const blockedWorkHours = calculateTotalBlockedWeeklyHours(profile.employments);
+      // 112h despierto (16h*7) - horas laborales bloqueadas - 56h descanso/operación personal
+      limits.discretionaryWeeklyHours = round2(Math.max(0, 112 - blockedWorkHours - 56));
+    }
+  }
+
   const goalsList = Array.isArray(activeGoals) ? activeGoals : [];
 
   const financialEntries = [];
@@ -112,7 +145,11 @@ export function evaluateGoalFeasibility(activeGoals = [], resourceLimits = {}) {
 
     evaluatedGoalsCount += 1;
     const goalId = goal.id ?? `goal_${index + 1}`;
-    const goalName = (typeof goal.name === 'string' && goal.name.trim()) ? goal.name.trim() : goalId;
+    const rawGoalLabel =
+      typeof goal.name === 'string' && goal.name.trim()
+        ? goal.name.trim()
+        : (typeof goal.title === 'string' && goal.title.trim() ? goal.title.trim() : goalId);
+    const goalName = rawGoalLabel;
 
     const impact = extractGoalResourceImpact(goal);
     const hasAnyImpact = Boolean(impact.financial || impact.time || impact.health);
@@ -145,14 +182,25 @@ export function evaluateGoalFeasibility(activeGoals = [], resourceLimits = {}) {
     }
 
     if (impact.health) {
-      const deficitCalories = estimateWeeklyCaloricDeficit(impact.health);
+      const derivedFromProfile =
+        impact.health.metricType === 'weight_kg' &&
+        impact.health.currentMetric === null &&
+        profile !== null;
+      const effectiveHealth = derivedFromProfile
+        ? { ...impact.health, currentMetric: profile.biometrics.currentWeightKg }
+        : impact.health;
+
+      const deficitCalories = estimateWeeklyCaloricDeficit(effectiveHealth);
       if (deficitCalories > 0) {
         healthEntries.push({
           id: goalId,
           name: goalName,
           demand: deficitCalories,
-          metricType: impact.health.metricType,
-          weeklyTargetDelta: impact.health.weeklyTargetDelta,
+          metricType: effectiveHealth.metricType,
+          currentMetric: effectiveHealth.currentMetric,
+          targetMetric: effectiveHealth.targetMetric,
+          currentMetricSource: derivedFromProfile ? 'user_profile' : 'goal',
+          weeklyTargetDelta: effectiveHealth.weeklyTargetDelta,
         });
       }
     }
@@ -251,6 +299,7 @@ export function evaluateGoalFeasibility(activeGoals = [], resourceLimits = {}) {
   return {
     feasible: conflicts.length === 0,
     evaluatedGoalsCount,
+    goalsWithImpactCount: evaluatedGoalsCount - goalsWithoutImpactCount,
     goalsWithoutImpactCount,
     totals: {
       financialBiweekly: totalFinancialBiweekly,
@@ -258,6 +307,7 @@ export function evaluateGoalFeasibility(activeGoals = [], resourceLimits = {}) {
       weeklyDeficitCalories: totalWeeklyDeficitCalories,
     },
     limits,
+    availableResources: { ...limits },
     surplus: {
       financialBiweekly: financialSurplus,
       weeklyHours: timeSurplus,
@@ -268,24 +318,31 @@ export function evaluateGoalFeasibility(activeGoals = [], resourceLimits = {}) {
 }
 
 export class GoalFeasibilityEvaluator {
-  constructor(firstArg = {}, secondArg = undefined) {
+  constructor(firstArg = {}, secondArg = undefined, thirdArg = null) {
     if (Array.isArray(firstArg)) {
       this.defaultGoals = firstArg;
       this.defaultLimits = secondArg && typeof secondArg === 'object' ? secondArg : {};
+      this.defaultProfile = thirdArg ?? null;
     } else if (
       firstArg &&
       typeof firstArg === 'object' &&
-      ('activeGoals' in firstArg || 'resourceLimits' in firstArg)
+      ('activeGoals' in firstArg || 'resourceLimits' in firstArg || 'userProfile' in firstArg)
     ) {
       this.defaultGoals = firstArg.activeGoals ?? [];
       this.defaultLimits = firstArg.resourceLimits ?? {};
+      this.defaultProfile = firstArg.userProfile ?? null;
     } else {
       this.defaultGoals = [];
       this.defaultLimits = firstArg && typeof firstArg === 'object' ? firstArg : {};
+      this.defaultProfile = secondArg ?? null;
     }
   }
 
-  evaluate(activeGoals = this.defaultGoals, resourceLimits = this.defaultLimits) {
-    return evaluateGoalFeasibility(activeGoals, resourceLimits);
+  evaluate(
+    activeGoals = this.defaultGoals,
+    resourceLimits = this.defaultLimits,
+    userProfile = this.defaultProfile
+  ) {
+    return evaluateGoalFeasibility(activeGoals, resourceLimits, userProfile);
   }
 }
